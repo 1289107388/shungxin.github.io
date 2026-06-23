@@ -364,6 +364,116 @@
     .scroll-progress { position: fixed; top: 0; left: 0; height: 2px; background: var(--color-accent); z-index: 101; transition: width 100ms linear; }
 
     /* ============================
+       Music Player — Floating Dock
+       ============================ */
+    .music-player {
+      position: fixed; bottom: 0; left: 0; right: 0; z-index: 200;
+      background: linear-gradient(180deg, rgba(12,12,18,0.94) 0%, rgba(8,8,14,0.98) 100%);
+      backdrop-filter: blur(28px); -webkit-backdrop-filter: blur(28px);
+      border-top: 1px solid rgba(212,168,83,0.22);
+      box-shadow: 0 -4px 40px rgba(0,0,0,0.5), 0 0 60px rgba(212,168,83,0.04);
+      padding: 10px var(--space-xl); display: flex; align-items: center; gap: var(--space-md);
+      min-height: 64px; transition: transform 500ms cubic-bezier(.22,.61,.36,1), opacity 400ms ease;
+    }
+    .music-player.hidden-player { transform: translateY(110%); opacity: 0; pointer-events: none; }
+
+    /* Toggle FAB */
+    .player-toggle {
+      position: fixed; bottom: 20px; right: 24px; z-index: 201;
+      width: 48px; height: 48px; border-radius: 50%;
+      background: rgba(8,8,12,0.88); border: 1.5px solid rgba(212,168,83,0.5);
+      cursor: pointer; display: flex; align-items: center; justify-content: center;
+      backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+      transition: all 350ms cubic-bezier(.22,.61,.36,1);
+      box-shadow: 0 2px 16px rgba(212,168,83,0.15), inset 0 0 12px rgba(212,168,83,0.05);
+    }
+    .player-toggle:hover { background: rgba(212,168,83,0.15); border-color: #D4A853;
+                           box-shadow: 0 0 28px rgba(212,168,83,0.35); transform: scale(1.08); }
+    .player-toggle svg { width: 20px; height: 20px; fill: #D4A853; }
+    .player-toggle.playing { animation: pulse-glow 2s ease infinite; border-color: #D4A853; }
+    @keyframes pulse-glow {
+      0%,100% { box-shadow: 0 2px 16px rgba(212,168,83,0.15); }
+      50% { box-shadow: 0 0 30px rgba(212,168,83,0.45), 0 0 60px rgba(212,168,83,0.15); }
+    }
+
+    /* Play button — large golden circle */
+    .player-play-btn {
+      width: 44px; height: 44px; border-radius: 50%;
+      background: linear-gradient(135deg, #D4A853 0%, #B8923E 100%);
+      border: none; cursor: pointer; flex-shrink: 0; margin-right: var(--space-sm);
+      display: flex; align-items: center; justify-content: center;
+      transition: all 250ms cubic-bezier(.22,.61,.36,1);
+      box-shadow: 0 2px 12px rgba(212,168,83,0.35), inset 0 1px 0 rgba(255,255,255,0.18);
+    }
+    .player-play-btn:hover { transform: scale(1.1); box-shadow: 0 4px 26px rgba(212,168,83,0.55), inset 0 1px 0 rgba(255,255,255,0.25); }
+    .player-play-btn:active { transform: scale(0.95); }
+    .player-play-btn svg { width: 18px; height: 18px; fill: #08080C; }
+
+    /* Track info */
+    .player-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; padding-right: var(--space-sm); }
+    .player-song-name { font-family: var(--font-display); font-size: 14px; font-weight: 600; color: #E8E8EC; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; letter-spacing: 0.01em; display: flex; align-items: center; }
+    .player-artist { font-size: 12px; color: #D4A853; letter-spacing: 0.03em; font-weight: 500; }
+
+    /* EQ bars animation when playing */
+    .player-eq-bars { display: none; align-items: flex-end; gap: 2px; height: 12px; margin-left: 8px; vertical-align: bottom; }
+    .player-eq-bars span { width: 3px; background: #D4A853; border-radius: 1px; animation: eq-bounce 0.7s ease-in-out infinite; }
+    .player-eq-bars span:nth-child(1) { height: 40%; animation-delay: 0s; }
+    .player-eq-bars span:nth-child(2) { height: 70%; animation-delay: 0.15s; }
+    .player-eq-bars span:nth-child(3) { height: 50%; animation-delay: 0.3s; }
+    .player-eq-bars span:nth-child(4) { height: 90%; animation-delay: 0.1s; }
+    .music-player.playing-state .player-eq-bars { display: inline-flex; }
+    @keyframes eq-bounce { 0%,100%{transform:scaleY(0.4);} 50%{transform:scaleY(1);} }
+    @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+
+    /* Progress bar — top edge with hover expand */
+    .player-progress-wrap {
+      position: absolute; top: 0; left: 0; right: 0; height: 3px; cursor: pointer;
+      background: rgba(255,255,255,0.07); z-index: 2; transition: height 200ms ease;
+    }
+    .player-progress-wrap:hover { height: 6px; }
+    .player-progress-bar {
+      height: 100%; background: linear-gradient(90deg, #B8923E, #D4A853, #E8C97A); width: 0%;
+      transition: width 120ms linear; position: relative; border-radius: 0 2px 2px 0;
+    }
+    .player-progress-bar::after {
+      content: ''; position: absolute; right: -5px; top: 50%; transform: translateY(-50%) scale(0);
+      width: 10px; height: 10px; border-radius: 50%; background: #fff;
+      box-shadow: 0 0 8px rgba(212,168,83,0.7);
+      transition: transform 200ms cubic-bezier(.22,.61,.36,1);
+    }
+    .player-progress-wrap:hover .player-progress-bar::after { transform: translateY(-50%) scale(1); }
+
+    /* Time */
+    .player-time { font-size: 11px; color: #888; font-family: 'SF Mono',Consolas,monospace; flex-shrink: 0; margin-left: var(--space-sm); min-width: 80px; text-align: right; letter-spacing: 0.02em; user-select: none; }
+
+    /* Volume */
+    .player-volume-wrap { display: flex; align-items: center; gap: 8px; margin-left: var(--space-sm); flex-shrink: 0; }
+    .player-volume-icon { color: #777; cursor: pointer; font-size: 15px; transition: color 200ms; user-select: none; line-height: 1; }
+    .player-volume-icon:hover { color: #D4A853; }
+    .player-volume-slider { width: 72px; height: 4px; background: rgba(255,255,255,0.1); border-radius: 2px; cursor: pointer; position: relative; overflow: visible; }
+    .player-volume-fill { height: 100%; background: linear-gradient(90deg,#D4A853,#E8C97A); border-radius: 2px; width: 80%; transition: width 100ms ease; }
+
+    /* Error message */
+    .player-error-msg {
+      font-size: 11px; color: #e06c6c; text-align: center; padding: 4px 12px; border-radius: 6px;
+      background: rgba(220,80,80,0.08); display: none; margin-left: auto; white-space: nowrap;
+    }
+    .player-error-msg.visible { display: block; }
+
+    @media (max-width: 639px) {
+      .music-player { padding: 8px var(--space-md); min-height: 56px; gap: var(--space-sm); }
+      .player-play-btn { width: 38px; height: 38px; margin-right: 8px; }
+      .player-play-btn svg { width: 16px; height: 16px; }
+      .player-volume-wrap { display: none; }
+      .player-time { font-size: 10px; min-width: 66px; margin-left: 4px; }
+      .player-info { padding-right: 4px; }
+      .player-song-name { font-size: 13px; }
+      .player-artist { font-size: 11px; }
+      .player-toggle { bottom: 16px; right: 16px; width: 42px; height: 42px; }
+      .player-toggle svg { width: 19px; height: 19px; }
+    }
+
+    /* ============================
        Responsive
        ============================ */
     @media (max-width: 1023px) { .gallery-grid { column-count: 1; } .nav-links { display: none; } .nav-hamburger { display: flex; } }
@@ -459,6 +569,39 @@
   <!-- Toast -->
   <div class="toast-container" id="toastContainer"></div>
 
+  <!-- Music Player -->
+  <div class="music-player hidden-player" id="musicPlayer">
+    <div class="player-progress-wrap" id="playerProgressWrap">
+      <div class="player-progress-bar" id="playerProgressBar"></div>
+    </div>
+    <button class="player-play-btn" id="playerPlayBtn" aria-label="播放/暂停" title="播放 / 暂停">
+      <svg id="playIcon" viewBox="0 0 24 24"><path d="M8,5 L19,12 L8,19 Z" fill="#08080C"/></svg>
+      <svg id="pauseIcon" viewBox="0 0 24 24" style="display:none"><rect x="5" y="4" width="4" height="16" rx="1" fill="#08080C"/><rect x="15" y="4" width="4" height="16" rx="1" fill="#08080C"/></svg>
+    </button>
+    <div class="player-info">
+      <span class="player-song-name">枫<span class="player-eq-bars"><span></span><span></span><span></span><span></span></span></span>
+      <span class="player-artist">周杰伦</span>
+    </div>
+    <span class="player-time" id="playerTime">--:-- / --:--</span>
+    <div class="player-volume-wrap">
+      <span class="player-volume-icon" id="volumeIcon" title="静音切换">🔊</span>
+      <div class="player-volume-slider" id="volumeSlider" title="调节音量">
+        <div class="player-volume-fill" id="volumeFill"></div>
+      </div>
+    </div>
+    <span class="player-error-msg" id="playerErrorMsg">⚠ 音源加载失败，请确认 audio/ 目录下存在音频文件</span>
+  </div>
+  <button class="player-toggle" id="playerToggle" aria-label="音乐播放器" title="音乐播放器">
+    <svg viewBox="0 0 24 24"><path d="M12,3 C10.34,3 9,4.37 9,6.07 V13.07 A3.99,3.99 0 1,0 11,14.93V6.07C11,5.48 11.45,5 12,5 A1,1 0 0,1 13,6.07V15 H15V6.07A3.06,3.06 0 0,0 12,3 M12,17 A2,2 0 1,1 14,15 A2,2 0 0,1 12,17 M18,7 V15 H20V7 H18 M19,8 A1,1 0 1,0 20,9 A1,1 0 0,0 19,8"/></svg>
+  </button>
+
+  <!-- Audio — local MP3 file from audio/ directory -->
+  <audio id="bgAudio" preload="auto" loop>
+    <source src="audio/枫-周杰伦.mp3" type="audio/mpeg">
+    <source src="audio/枫-周杰伦.flac" type="audio/flac">
+    您的浏览器不支持音频播放。
+  </audio>
+
   <!-- Footer -->
   <footer class="site-footer" id="footer">
     <div class="footer-logo">Stellar<span style="color:var(--color-accent);">.</span></div>
@@ -482,6 +625,12 @@
       { id: 7, src: 'images/1782210999263.png', title: '人像作品 07', category: 'portrait', date: '', location: '', isNew: false },
       { id: 8, src: 'images/1782211128132.png', title: '人像作品 08', category: 'portrait', date: '', location: '', isNew: false },
       { id: 9, src: 'images/1782211157173.png', title: '人像作品 09', category: 'portrait', date: '', location: '', isNew: false },
+      { id: 10, src: 'images/7afeddec7b88421123646b810764342e.jpg', title: '人像作品 10', category: 'portrait', date: '', location: '', isNew: false },
+      { id: 11, src: 'images/7fc0057e819cc7f9a81da2b882e6e9a6.jpg', title: '人像作品 11', category: 'portrait', date: '', location: '', isNew: false },
+      { id: 12, src: 'images/893b23a3e941a070a5a9916fdb95ea9a.jpg', title: '人像作品 12', category: 'portrait', date: '', location: '', isNew: false },
+      { id: 13, src: 'images/f8bd7ec8f44cfc651eb30595a02c6c7a.jpg', title: '人像作品 13', category: 'portrait', date: '', location: '', isNew: false },
+      { id: 14, src: 'images/119064098755adadd4f2ba0b34d069b1.jpg', title: '人像作品 14', category: 'portrait', date: '', location: '', isNew: false },
+      { id: 15, src: 'images/122d3967ac65825bd54b528e53d5b805.jpg', title: '人像作品 15', category: 'portrait', date: '', location: '', isNew: false },
     ];
 
     /* ============================
@@ -1122,6 +1271,119 @@
        Init
        ============================ */
     renderGallery('all');
+
+    /* ============================
+       Music Player Controls
+       ============================ */
+    (function() {
+      const bgAudio = document.getElementById('bgAudio');
+      const playerPlayBtn = document.getElementById('playerPlayBtn');
+      const playIcon = document.getElementById('playIcon');
+      const pauseIcon = document.getElementById('pauseIcon');
+      const playerProgressBar = document.getElementById('playerProgressBar');
+      const playerProgressWrap = document.getElementById('playerProgressWrap');
+      const playerTime = document.getElementById('playerTime');
+      const musicPlayer = document.getElementById('musicPlayer');
+      const playerToggle = document.getElementById('playerToggle');
+      const volumeSlider = document.getElementById('volumeSlider');
+      const volumeFill = document.getElementById('volumeFill');
+      const volumeIcon = document.getElementById('volumeIcon');
+      const playerErrorMsg = document.getElementById('playerErrorMsg');
+
+      let isPlaying = false;
+      let currentVolume = 0.7;
+
+      bgAudio.volume = currentVolume;
+      volumeFill.style.width = (currentVolume * 100) + '%';
+
+      function formatTime(sec) {
+        if (!sec || !isFinite(sec) || sec < 0) return '--:--';
+        const m = Math.floor(sec / 60);
+        const s = Math.floor(sec % 60);
+        return m + ':' + (s < 10 ? '0' : '') + s;
+      }
+
+      function updateUI() {
+        if (isPlaying) {
+          playIcon.style.display = 'none'; pauseIcon.style.display = '';
+          musicPlayer.classList.add('playing-state'); playerToggle.classList.add('playing');
+          // Rotate the music note icon
+          const svg = playerToggle.querySelector('svg');
+          if (svg) svg.style.animation = 'spin 3s linear infinite';
+        } else {
+          playIcon.style.display = ''; pauseIcon.style.display = 'none';
+          musicPlayer.classList.remove('playing-state'); playerToggle.classList.remove('playing');
+          const svg = playerToggle.querySelector('svg');
+          if (svg) svg.style.animation = '';
+        }
+      }
+
+      function togglePlay() {
+        if (isPlaying) { bgAudio.pause(); isPlaying = false; }
+        else {
+          bgAudio.play().catch(function(err) {
+            console.warn('Audio play failed:', err);
+            playerErrorMsg.classList.add('visible');
+            isPlaying = false; updateUI();
+          });
+          if (!bgAudio.error) { isPlaying = true; }
+        }
+        updateUI();
+      }
+
+      playerPlayBtn.addEventListener('click', togglePlay);
+      playerToggle.addEventListener('click', function() {
+        musicPlayer.classList.toggle('hidden-player');
+      });
+
+      // Progress
+      bgAudio.addEventListener('timeupdate', function() {
+        if (bgAudio.duration && isFinite(bgAudio.duration)) {
+          var pct = (bgAudio.currentTime / bgAudio.duration) * 100;
+          playerProgressBar.style.width = pct + '%';
+          playerTime.textContent = formatTime(bgAudio.currentTime) + ' / ' + formatTime(bgAudio.duration);
+        }
+      });
+      bgAudio.addEventListener('loadedmetadata', function() {
+        playerTime.textContent = '--:-- / ' + formatTime(bgAudio.duration);
+        playerErrorMsg.classList.remove('visible');
+      });
+      bgAudio.addEventListener('error', function(e) {
+        console.warn('Audio source error:', e);
+        playerErrorMsg.classList.add('visible');
+        playerTime.textContent = '--:-- / --:--';
+      });
+
+      // Seek
+      playerProgressWrap.addEventListener('click', function(e) {
+        if (!bgAudio.duration || !isFinite(bgAudio.duration)) return;
+        var rect = playerProgressWrap.getBoundingClientRect();
+        var pct = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+        bgAudio.currentTime = pct * bgAudio.duration;
+      });
+
+      // Volume
+      volumeSlider.addEventListener('click', function(e) {
+        var rect = volumeSlider.getBoundingClientRect();
+        var pct = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+        currentVolume = pct; bgAudio.volume = pct; volumeFill.style.width = (pct * 100) + '%';
+        volumeIcon.textContent = pct === 0 ? '\u{1F507}' : pct < 0.5 ? '\u{1F508}' : '\u{1F50A}';
+      });
+      volumeIcon.addEventListener('click', function(e) {
+        e.stopPropagation();
+        if (currentVolume > 0) { bgAudio.volume = 0; volumeFill.style.width = '0%'; volumeIcon.textContent = '\u{1F507}'; currentVolume = 0; }
+        else { currentVolume = 0.7; bgAudio.volume = 0.7; volumeFill.style.width = '70%'; volumeIcon.textContent = '\u{1F50A}'; }
+      });
+
+      // Keyboard shortcut: Space to toggle
+      document.addEventListener('keydown', function(e) {
+        if (e.code === 'Space' && e.target.tagName !== 'INPUT' && e.target.tagName !== 'TEXTAREA') {
+          e.preventDefault();
+          togglePlay();
+        }
+      });
+    })();
+  </script>
   </script>
 </body>
 </html>
