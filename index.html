@@ -489,6 +489,275 @@
       .gallery-header { padding: 0 var(--space-md); }
       .image-card-info { padding: 30px var(--space-sm) var(--space-sm); }
     }
+
+    /* ============================
+       Comments System (v6)
+       ============================ */
+    /* 评论按钮 — 卡片操作 */
+    .card-action-btn.comment-btn { position: relative; }
+    .card-action-btn.comment-btn .comment-count-badge {
+      position: absolute; top: 2px; right: 2px;
+      min-width: 18px; height: 18px; padding: 0 5px;
+      background: var(--color-accent); color: var(--color-bg-deep);
+      font-size: 10px; font-weight: 700;
+      border-radius: 9999px;
+      display: flex; align-items: center; justify-content: center;
+      line-height: 1;
+      box-shadow: 0 0 8px rgba(212,168,83,0.6);
+    }
+
+    /* Lightbox 工具栏新增"评论"按钮 */
+    .btn-ghost.comment-btn { position: relative; }
+    .btn-ghost.comment-btn .comment-count-inline {
+      display: inline-block; min-width: 18px; height: 18px; padding: 0 6px; margin-left: 2px;
+      background: rgba(212,168,83,0.18); color: var(--color-accent);
+      font-size: 11px; font-weight: 700; border-radius: 9999px;
+      line-height: 18px; text-align: center;
+    }
+
+    /* 评论区抽屉 — 从右侧滑入 */
+    .comments-drawer-overlay {
+      position: fixed; inset: 0; z-index: 220;
+      background: rgba(8,8,12,0.6);
+      backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+      opacity: 0; pointer-events: none;
+      transition: opacity 300ms var(--ease-stellar);
+    }
+    .comments-drawer-overlay.open { opacity: 1; pointer-events: auto; }
+
+    .comments-drawer {
+      position: fixed; top: 0; right: 0; bottom: 0; z-index: 221;
+      width: min(480px, 100vw);
+      background: var(--color-bg-surface);
+      border-left: 1px solid var(--color-border-default);
+      box-shadow: -16px 0 60px rgba(0,0,0,0.6), -1px 0 0 rgba(212,168,83,0.15);
+      display: flex; flex-direction: column;
+      transform: translateX(100%);
+      transition: transform 400ms cubic-bezier(.22,.61,.36,1);
+    }
+    .comments-drawer-overlay.open .comments-drawer { transform: translateX(0); }
+
+    .comments-drawer-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: var(--space-lg) var(--space-xl);
+      border-bottom: 1px solid var(--color-border-default);
+      flex-shrink: 0;
+      background: rgba(8,8,12,0.6);
+      backdrop-filter: blur(12px);
+    }
+    .comments-drawer-title {
+      display: flex; flex-direction: column; gap: 2px; min-width: 0;
+    }
+    .comments-drawer-title-main {
+      font-family: var(--font-display); font-size: 16px; font-weight: 600;
+      color: var(--color-gray-100); letter-spacing: -0.01em;
+    }
+    .comments-drawer-title-sub {
+      font-size: 12px; color: var(--color-gray-400);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .comments-drawer-actions {
+      display: flex; align-items: center; gap: var(--space-sm); flex-shrink: 0;
+    }
+    .comments-drawer-iconbtn {
+      width: 36px; height: 36px;
+      background: transparent; border: 1px solid var(--color-border-strong);
+      border-radius: 50%; color: var(--color-gray-200);
+      cursor: pointer; display: flex; align-items: center; justify-content: center;
+      transition: all 200ms ease; padding: 0;
+    }
+    .comments-drawer-iconbtn svg { width: 16px; height: 16px; }
+    .comments-drawer-iconbtn:hover { color: var(--color-accent); border-color: var(--color-accent); }
+    .comments-drawer-close {
+      width: 36px; height: 36px;
+      background: transparent; border: 1px solid var(--color-border-strong);
+      border-radius: 50%; color: var(--color-gray-200);
+      cursor: pointer; display: flex; align-items: center; justify-content: center;
+      transition: all 200ms ease; flex-shrink: 0;
+    }
+    .comments-drawer-close:hover { color: var(--color-accent); border-color: var(--color-accent); }
+
+    /* Giscus iframe 容器 */
+    #giscusFrame {
+      width: 100%; min-height: 540px;
+      border: none; display: block; background: transparent;
+    }
+    .giscus-config-error {
+      padding: var(--space-2xl) var(--space-md);
+      text-align: center;
+    }
+    .giscus-config-error-icon {
+      width: 56px; height: 56px; margin: 0 auto var(--space-md);
+      border-radius: 50%;
+      background: rgba(251, 191, 36, 0.1);
+      color: var(--color-warning);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 24px; border: 1px solid rgba(251, 191, 36, 0.3);
+    }
+    .giscus-config-error-title {
+      font-size: 15px; font-weight: 600; color: var(--color-gray-100);
+      margin-bottom: var(--space-sm);
+    }
+    .giscus-config-error-desc {
+      font-size: 12px; line-height: 1.6; color: var(--color-gray-400);
+      max-width: 380px; margin: 0 auto var(--space-md);
+    }
+    .giscus-config-error-desc code {
+      background: var(--color-gray-600); padding: 1px 5px; border-radius: 3px;
+      font-size: 11px; color: var(--color-accent);
+    }
+
+    .comments-drawer-body {
+      flex: 1; overflow-y: auto; padding: var(--space-lg) var(--space-xl);
+      scrollbar-width: thin; scrollbar-color: var(--color-gray-500) transparent;
+    }
+    .comments-drawer-body::-webkit-scrollbar { width: 6px; }
+    .comments-drawer-body::-webkit-scrollbar-track { background: transparent; }
+    .comments-drawer-body::-webkit-scrollbar-thumb { background: var(--color-gray-500); border-radius: 3px; }
+
+    /* 评论列表项 */
+    .comment-item {
+      display: flex; gap: var(--space-md);
+      padding: var(--space-md) 0;
+      border-bottom: 1px solid rgba(255,255,255,0.04);
+      animation: comment-in 350ms var(--ease-stellar);
+    }
+    @keyframes comment-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+    .comment-item:last-child { border-bottom: none; }
+
+    .comment-avatar {
+      width: 36px; height: 36px; border-radius: 50%;
+      background: linear-gradient(135deg, var(--color-accent), #B8923E);
+      display: flex; align-items: center; justify-content: center;
+      color: var(--color-bg-deep); font-size: 14px; font-weight: 700;
+      flex-shrink: 0; box-shadow: 0 2px 8px rgba(212,168,83,0.2);
+    }
+    .comment-avatar img { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; }
+
+    .comment-body { flex: 1; min-width: 0; }
+    .comment-meta {
+      display: flex; align-items: center; gap: var(--space-sm);
+      margin-bottom: 4px; flex-wrap: wrap;
+    }
+    .comment-author {
+      font-size: 13px; font-weight: 600; color: var(--color-accent);
+    }
+    .comment-time { font-size: 11px; color: var(--color-gray-400); }
+    .comment-badge-from {
+      font-size: 10px; padding: 1px 6px; border-radius: 9999px;
+      background: rgba(212,168,83,0.12); color: var(--color-accent);
+      border: 1px solid rgba(212,168,83,0.2);
+    }
+    .comment-content {
+      font-size: 14px; line-height: 1.6; color: var(--color-gray-100);
+      word-wrap: break-word; word-break: break-word;
+    }
+    .comment-content code { background: var(--color-gray-600); padding: 1px 6px; border-radius: 4px; font-size: 12px; font-family: 'SF Mono', Consolas, monospace; }
+    .comment-content a { color: var(--color-accent); text-decoration: none; border-bottom: 1px dashed rgba(212,168,83,0.4); }
+    .comment-content a:hover { border-bottom-style: solid; }
+
+    /* 加载/空状态 */
+    .comments-empty {
+      text-align: center; padding: var(--space-2xl) var(--space-md);
+      color: var(--color-gray-400);
+    }
+    .comments-empty-icon {
+      width: 56px; height: 56px; margin: 0 auto var(--space-md);
+      border-radius: 50%; background: var(--color-bg-card);
+      display: flex; align-items: center; justify-content: center;
+      color: var(--color-accent); font-size: 24px;
+      border: 1px dashed var(--color-border-strong);
+    }
+    .comments-empty-title { font-size: 15px; font-weight: 600; color: var(--color-gray-200); margin-bottom: var(--space-xs); }
+    .comments-empty-desc { font-size: 12px; line-height: 1.5; }
+
+    .comments-loading {
+      display: flex; align-items: center; justify-content: center; gap: var(--space-sm);
+      padding: var(--space-2xl) 0; color: var(--color-gray-400); font-size: 13px;
+    }
+    .comments-loading-spinner {
+      width: 16px; height: 16px; border: 2px solid var(--color-gray-600);
+      border-top-color: var(--color-accent); border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+
+    /* 发布表单 */
+    .comments-composer {
+      flex-shrink: 0;
+      padding: var(--space-md) var(--space-xl) var(--space-lg);
+      background: rgba(8,8,12,0.7);
+      border-top: 1px solid var(--color-border-default);
+      backdrop-filter: blur(12px);
+    }
+    .composer-hint {
+      display: flex; align-items: center; gap: var(--space-sm);
+      font-size: 11px; color: var(--color-gray-400);
+      margin-bottom: var(--space-sm); line-height: 1.5;
+    }
+    .composer-hint svg { width: 14px; height: 14px; color: var(--color-accent); flex-shrink: 0; }
+    .composer-form {
+      display: flex; gap: var(--space-sm);
+    }
+    .composer-input {
+      flex: 1; min-width: 0;
+      background: var(--color-bg-card);
+      border: 1px solid var(--color-border-default);
+      border-radius: 10px; padding: 10px 14px;
+      font-size: 13px; font-family: var(--font-body);
+      color: var(--color-gray-100);
+      transition: border-color 200ms ease;
+    }
+    .composer-input:focus { outline: none; border-color: var(--color-accent); }
+    .composer-input::placeholder { color: var(--color-gray-400); }
+    .composer-send {
+      width: 40px; height: 40px; flex-shrink: 0;
+      background: linear-gradient(135deg, var(--color-accent), #B8923E);
+      border: none; border-radius: 10px;
+      color: var(--color-bg-deep); cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      transition: all 200ms ease; box-shadow: 0 2px 10px rgba(212,168,83,0.3);
+    }
+    .composer-send:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 4px 16px rgba(212,168,83,0.5); }
+    .composer-send:disabled { opacity: 0.4; cursor: not-allowed; }
+    .composer-send svg { width: 16px; height: 16px; fill: currentColor; }
+
+    /* 发布中过渡态 */
+    .comments-drawer.publishing { pointer-events: none; opacity: 0.7; }
+
+    /* 跨域提示横幅 */
+    .comments-crossorigin-banner {
+      margin: 0 var(--space-xl) var(--space-md);
+      padding: var(--space-md);
+      background: rgba(212,168,83,0.08);
+      border: 1px solid rgba(212,168,83,0.2);
+      border-radius: 10px;
+      font-size: 12px; line-height: 1.55;
+      color: var(--color-gray-200);
+    }
+    .comments-crossorigin-banner strong { color: var(--color-accent); font-weight: 600; }
+    .comments-crossorigin-banner a {
+      color: var(--color-accent); text-decoration: none; font-weight: 600;
+      border-bottom: 1px dashed rgba(212,168,83,0.4);
+    }
+    .comments-crossorigin-banner a:hover { border-bottom-style: solid; }
+
+    /* 顶部导航加一个"评论"入口 */
+    .nav-comments-link {
+      display: flex; align-items: center; gap: 6px;
+      font-size: 14px; font-weight: 500; color: var(--color-gray-200);
+      text-decoration: none; transition: color 200ms ease;
+      cursor: pointer; min-height: 44px;
+      background: transparent; border: none; padding: 0; font-family: var(--font-body);
+    }
+    .nav-comments-link:hover, .nav-comments-link.active { color: var(--color-accent); }
+    .nav-comments-link svg { width: 16px; height: 16px; }
+
+    /* 移动端评论适配 */
+    @media (max-width: 639px) {
+      .comments-drawer { width: 100vw; }
+      .comments-drawer-header, .comments-drawer-body, .comments-composer { padding-left: var(--space-md); padding-right: var(--space-md); }
+      .comments-crossorigin-banner { margin-left: var(--space-md); margin-right: var(--space-md); }
+    }
   </style>
 </head>
 <body>
@@ -502,6 +771,12 @@
     <ul class="nav-links">
       <li><a class="active" data-section="gallery">Gallery</a></li>
       <li><a data-section="footer">About</a></li>
+      <li>
+        <button class="nav-comments-link" id="navCommentsBtn" data-section="comments" aria-label="评论">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
+          评论
+        </button>
+      </li>
     </ul>
     <button class="nav-hamburger" id="navHamburger" aria-label="Menu">☰</button>
   </nav>
@@ -510,6 +785,7 @@
     <button class="mobile-nav-close" id="mobileNavClose">✕</button>
     <a data-section="gallery">Gallery</a>
     <a data-section="footer">About</a>
+    <a data-section="comments">评论</a>
   </div>
 
   <!-- Gallery -->
@@ -544,6 +820,9 @@
       <button class="btn-ghost" id="lightboxShare">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>分享
       </button>
+      <button class="btn-ghost comment-btn" id="lightboxComment" title="查看/发表评论">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>评论<span class="comment-count-inline" id="lightboxCommentCount">0</span>
+      </button>
       <button class="btn-ghost" id="lightboxZoomIn" title="放大">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></svg>放大
       </button>
@@ -568,6 +847,36 @@
 
   <!-- Toast -->
   <div class="toast-container" id="toastContainer"></div>
+
+  <!-- Comments Drawer — 真实模式直接嵌入 Giscus + 二级域名作为完整页入口 -->
+  <div class="comments-drawer-overlay" id="commentsOverlay">
+    <div class="comments-drawer" id="commentsDrawer" role="dialog" aria-label="评论">
+      <div class="comments-drawer-header">
+        <div class="comments-drawer-title">
+          <div class="comments-drawer-title-main" id="commentsDrawerTitle">评论</div>
+          <div class="comments-drawer-title-sub" id="commentsDrawerSubtitle">GitHub Discussions · 真实模式</div>
+        </div>
+        <div class="comments-drawer-actions">
+          <button class="comments-drawer-iconbtn" id="openSubdomain" title="在子域名独立页打开" aria-label="在子域名打开">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+          </button>
+          <button class="comments-drawer-close" id="commentsDrawerClose" aria-label="关闭">✕</button>
+        </div>
+      </div>
+      <div class="comments-drawer-body" id="commentsDrawerBody">
+        <div class="comments-loading">
+          <div class="comments-loading-spinner"></div>
+          正在从 <strong style="color:var(--color-accent);margin:0 4px;">GitHub Discussions</strong> 加载评论…
+        </div>
+      </div>
+      <div class="comments-composer">
+        <div class="composer-hint">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+          <span>评论通过 <strong style="color:var(--color-accent);">GitHub Discussions</strong> 真实发布，需登录 GitHub 账号。点击右上角 ↗ 在独立子站查看完整视图。</span>
+        </div>
+      </div>
+    </div>
+  </div>
 
   <!-- Music Player -->
   <div class="music-player hidden-player" id="musicPlayer">
@@ -1384,6 +1693,287 @@
       });
     })();
   </script>
+
+  /* ============================
+     Comments System (v7) — Giscus 真实模式
+     ============================ */
+  <script>
+    (function() {
+      'use strict';
+
+      // === Giscus 配置（与 comments.html 保持一致） ===
+      const GISCUS_CONFIG = {
+        repo: 'shungxin/shungxin.github.io',  // 复用主仓库（已部署到 shungxin.github.io）
+        repoId: 'R_kgDONxxxxx',         // TODO: 替换为真实 repo-id（启用 Discussions 后从 giscus.app 获取）
+        category: 'General',
+        categoryId: 'DIC_kwDONxxxxx',   // TODO: 替换为真实 category-id
+        theme: 'noborder_dark',
+        lang: 'zh-CN',
+      };
+
+      // === 二级域名配置（子站独立页） ===
+      const COMMENTS_BASE = 'https://comments.shungxin.github.io';
+
+      // === 状态 ===
+      const state = {
+        currentThread: 'site',
+        currentTitle: '整站讨论',
+        currentSubtitle: 'GitHub Discussions · 真实模式',
+      };
+
+      // === 检测是否已配置 ===
+      const isConfigured =
+        GISCUS_CONFIG.repoId && !GISCUS_CONFIG.repoId.includes('xxxxx') &&
+        GISCUS_CONFIG.categoryId && !GISCUS_CONFIG.categoryId.includes('xxxxx');
+
+      // === 抽屉控制 ===
+      const overlay = document.getElementById('commentsOverlay');
+      const closeBtn = document.getElementById('commentsDrawerClose');
+      const titleEl = document.getElementById('commentsDrawerTitle');
+      const subtitleEl = document.getElementById('commentsDrawerSubtitle');
+      const body = document.getElementById('commentsDrawerBody');
+      const openSubdomainBtn = document.getElementById('openSubdomain');
+
+      function openDrawer() {
+        overlay.classList.add('open');
+        document.body.style.overflow = 'hidden';
+      }
+      function closeDrawer() {
+        overlay.classList.remove('open');
+        document.body.style.overflow = '';
+      }
+      closeBtn.addEventListener('click', closeDrawer);
+      overlay.addEventListener('click', (e) => { if (e.target === overlay) closeDrawer(); });
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && overlay.classList.contains('open')) closeDrawer();
+      });
+
+      // === 在子域名独立页打开 ===
+      openSubdomainBtn.addEventListener('click', () => {
+        const url = COMMENTS_BASE
+          + '/?thread=' + encodeURIComponent(state.currentThread)
+          + '&title=' + encodeURIComponent(state.currentTitle);
+        window.open(url, '_blank', 'noopener,noreferrer');
+      });
+
+      // === 加载 Giscus iframe ===
+      function loadGiscusFor(threadKey) {
+        body.innerHTML = '';
+        if (!isConfigured) {
+          renderConfigError();
+          return;
+        }
+        // 加载态
+        body.innerHTML = '<div class="comments-loading"><div class="comments-loading-spinner"></div>正在从 <strong style="color:var(--color-accent);margin:0 4px;">GitHub Discussions</strong> 加载评论…</div>';
+        setTimeout(() => {
+          body.innerHTML = '';
+          const script = document.createElement('script');
+          script.src = 'https://giscus.app/client.js';
+          script.async = true;
+          script.crossOrigin = 'anonymous';
+          script.setAttribute('data-repo', GISCUS_CONFIG.repo);
+          script.setAttribute('data-repo-id', GISCUS_CONFIG.repoId);
+          script.setAttribute('data-category', GISCUS_CONFIG.category);
+          script.setAttribute('data-category-id', GISCUS_CONFIG.categoryId);
+          script.setAttribute('data-mapping', 'specific');
+          script.setAttribute('data-term', threadKey);
+          script.setAttribute('data-strict', '1');
+          script.setAttribute('data-reactions-enabled', '1');
+          script.setAttribute('data-emit-metadata', '0');
+          script.setAttribute('data-input-position', 'top');
+          script.setAttribute('data-theme', GISCUS_CONFIG.theme);
+          script.setAttribute('data-lang', GISCUS_CONFIG.lang);
+          script.setAttribute('data-loading', 'lazy');
+          script.onerror = () => {
+            body.innerHTML = '<div class="comments-empty"><div class="comments-empty-icon">⚠</div><div class="comments-empty-title">无法连接到 giscus.app</div><div class="comments-empty-desc">请检查网络连接或稍后重试</div></div>';
+          };
+          body.appendChild(script);
+        }, 200);
+      }
+
+      // === 未配置时显示引导界面 ===
+      function renderConfigError() {
+        body.innerHTML =
+          '<div class="giscus-config-error">' +
+            '<div class="giscus-config-error-icon">⚙</div>' +
+            '<div class="giscus-config-error-title">评论系统待启用</div>' +
+            '<div class="giscus-config-error-desc">' +
+              'Giscus 配置尚未完成。请按以下步骤启用真实评论：<br><br>' +
+              '<strong style="color:var(--color-accent);">1.</strong> 访问 <code>giscus.app/zh-CN</code><br>' +
+              '<strong style="color:var(--color-accent);">2.</strong> 填入仓库 <code>shungxin/shungxin.github.io</code><br>' +
+              '<strong style="color:var(--color-accent);">3.</strong> 复制 <code>repo-id</code> 和 <code>category-id</code><br>' +
+              '<strong style="color:var(--color-accent);">4.</strong> 填入 <code>index.html</code> 顶部 <code>GISCUS_CONFIG</code>' +
+            '</div>' +
+            '<button class="composer-send" onclick="window.open(\'https://giscus.app/zh-CN\', \'_blank\')" style="width:auto;padding:0 20px;height:40px;">前往 giscus.app 配置</button>' +
+          '</div>';
+      }
+
+      // === 打开指定 thread 的评论 ===
+      function showCommentsFor(threadKey, title, subtitle) {
+        state.currentThread = threadKey;
+        state.currentTitle = title;
+        state.currentSubtitle = subtitle;
+        titleEl.textContent = title;
+        subtitleEl.textContent = subtitle;
+        openDrawer();
+        loadGiscusFor(threadKey);
+      }
+
+      // === 监听 Giscus iframe 的 postMessage（评论变化时刷新计数） ===
+      window.addEventListener('message', (e) => {
+        if (e.origin !== 'https://giscus.app') return;
+        const data = e.data;
+        if (!data || !data.giscus) return;
+        const g = data.giscus;
+        if (g.discussion && g.discussion.totalCommentCount != null) {
+          const count = g.discussion.totalCommentCount;
+          const key = state.currentThread;
+          if (key) updateBadge(key, count);
+        }
+        if (g.comment) {
+          const key = state.currentThread;
+          if (key) {
+            const card = key.startsWith('image-')
+              ? document.querySelector('.image-card[data-id="' + key.replace('image-', '') + '"] .comment-btn')
+              : null;
+            if (card) {
+              const existing = parseInt((card.querySelector('.comment-count-badge') || { textContent: '0' }).textContent) || 0;
+              updateBadge(key, existing + 1);
+            }
+          }
+          showToast('✓ 评论已同步到 GitHub Discussions');
+        }
+      });
+
+      // === 卡片角标更新 ===
+      function updateBadge(threadKey, count) {
+        if (threadKey.startsWith('image-')) {
+          const imgId = threadKey.replace('image-', '');
+          const card = document.querySelector('.image-card[data-id="' + imgId + '"]');
+          if (card) {
+            const btn = card.querySelector('.comment-btn');
+            if (btn) {
+              let badge = btn.querySelector('.comment-count-badge');
+              if (count > 0) {
+                if (!badge) { badge = document.createElement('span'); badge.className = 'comment-count-badge'; btn.appendChild(badge); }
+                badge.textContent = count > 99 ? '99+' : count;
+              } else if (badge) { badge.remove(); }
+            }
+          }
+        }
+        const lightboxCount = document.getElementById('lightboxCommentCount');
+        if (lightboxCount && state.currentThread === threadKey) {
+          lightboxCount.textContent = count;
+        }
+      }
+
+      // === 各处入口绑定 ===
+
+      // 1) 顶部导航评论按钮
+      const navCommentsBtn = document.getElementById('navCommentsBtn');
+      if (navCommentsBtn) {
+        navCommentsBtn.addEventListener('click', () => {
+          showCommentsFor('site', '整站讨论', 'GitHub Discussions · 真实模式');
+        });
+      }
+
+      // 2) Lightbox 工具栏评论按钮
+      const lightboxComment = document.getElementById('lightboxComment');
+      if (lightboxComment) {
+        lightboxComment.addEventListener('click', () => {
+          if (currentLightboxIndex < 0) return;
+          const img = filteredImages[currentLightboxIndex];
+          showCommentsFor('image-' + img.id, '评论 · ' + img.title, '图片 #' + img.id + ' · GitHub Discussions');
+        });
+      }
+
+      // 3) 卡片评论按钮
+      function attachCommentBtn(card, img) {
+        if (card.querySelector('.comment-btn')) return;
+        const actions = card.querySelector('.image-card-actions');
+        if (!actions) return;
+        const btn = document.createElement('button');
+        btn.className = 'card-action-btn comment-btn';
+        btn.title = '评论';
+        btn.setAttribute('aria-label', 'View comments');
+        btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>';
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          showCommentsFor('image-' + img.id, '评论 · ' + img.title, '图片 #' + img.id + ' · GitHub Discussions');
+        });
+        actions.appendChild(btn);
+      }
+
+      // 4) 监听 DOM 变化
+      const galleryGridEl = document.getElementById('galleryGrid');
+      if (galleryGridEl) {
+        const mo = new MutationObserver(() => {
+          galleryGridEl.querySelectorAll('.image-card').forEach(card => {
+            const id = card.dataset.id;
+            if (!id) return;
+            const img = imageData.find(i => String(i.id) === String(id));
+            if (img) attachCommentBtn(card, img);
+          });
+        });
+        mo.observe(galleryGridEl, { childList: true });
+        setTimeout(() => {
+          galleryGridEl.querySelectorAll('.image-card').forEach(card => {
+            const id = card.dataset.id;
+            if (!id) return;
+            const img = imageData.find(i => String(i.id) === String(id));
+            if (img) attachCommentBtn(card, img);
+          });
+        }, 0);
+      }
+
+      // 5) URL hash 直接打开
+      function checkHashOnLoad() {
+        const m = (location.hash || '').match(/^#comments-(.+)$/);
+        if (m) {
+          const thread = m[1];
+          if (thread === 'site') {
+            showCommentsFor('site', '整站讨论', 'GitHub Discussions · 真实模式');
+          } else if (thread.startsWith('image-')) {
+            const id = thread.replace('image-', '');
+            const img = imageData.find(i => String(i.id) === id);
+            if (img) showCommentsFor(thread, '评论 · ' + img.title, '图片 #' + img.id);
+          }
+        }
+      }
+      window.addEventListener('hashchange', checkHashOnLoad);
+      setTimeout(checkHashOnLoad, 100);
+
+      // 6) 控制台配置检查器
+      window.StellarCommentsCheck = function() {
+        const lines = [
+          '%c  Stellar Comments 配置检查器  ',
+          'background: #D4A853; color: #08080C; padding: 4px 12px; font-weight: bold;',
+          '',
+          'Giscus 已配置：' + (isConfigured ? '✅ 是' : '❌ 否（占位符未替换）'),
+          '仓库：' + GISCUS_CONFIG.repo,
+          'repo-id：' + GISCUS_CONFIG.repoId,
+          'category-id：' + GISCUS_CONFIG.categoryId,
+          '子站地址：' + COMMENTS_BASE,
+          '',
+          isConfigured ? '✓ 真实模式已启用，评论会保存到 GitHub Discussions' : '⚠ 当前显示配置引导界面，替换占位符后启用真实模式',
+          '',
+          '配置步骤：',
+          '1. 启用仓库 ' + GISCUS_CONFIG.repo + ' 的 Discussions',
+          '2. 访问 https://giscus.app/zh-CN 配置',
+          '3. 替换 GISCUS_CONFIG.repoId / categoryId',
+          '4. 推送部署即可',
+        ];
+        console.log('%c' + lines[0], lines[1]);
+        for (let i = 2; i < lines.length; i++) console.log(lines[i]);
+        return { isConfigured, repo: GISCUS_CONFIG.repo, base: COMMENTS_BASE };
+      };
+      // 首次加载时自动打印
+      if (typeof console !== 'undefined' && console.log) {
+        setTimeout(() => { try { window.StellarCommentsCheck(); } catch (e) {} }, 1000);
+      }
+
+      window.StellarComments = { state, showCommentsFor, isConfigured };
+    })();
   </script>
 </body>
 </html>
