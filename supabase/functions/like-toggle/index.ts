@@ -15,14 +15,14 @@ const CORS_HEADERS = {
   'Access-Control-Max-Age': '86400',
 };
 
-function createCorsResponse(body: unknown, status: number = 200): Response {
+function createCorsResponse(body, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
     headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
   });
 }
 
-function createErrorResponse(message: string, status: number = 400): Response {
+function createErrorResponse(message, status = 400) {
   return createCorsResponse({ error: message }, status);
 }
 
@@ -37,10 +37,8 @@ function createServiceClient() {
 }
 
 // === 共享：限流器 ===
-interface RateLimitEntry { count: number; resetAt: number; }
-const rateLimitStore = new Map<string, RateLimitEntry>();
-
-function checkRateLimit(key: string, maxRequests: number = 10, windowMs: number = 60000) {
+const rateLimitStore = new Map();
+function checkRateLimit(key, maxRequests = 10, windowMs = 60000) {
   const now = Date.now();
   const entry = rateLimitStore.get(key);
   if (!entry || now > entry.resetAt) {
@@ -59,15 +57,9 @@ function checkRateLimit(key: string, maxRequests: number = 10, windowMs: number 
 const LIKE_MAX_PER_MINUTE = 10;
 const LIKE_WINDOW_MS = 60000;
 
-interface LikeRequest {
-  image_id: number;
-  action: 'like' | 'unlike';
-  user_id: string;
-}
-
-Deno.serve(async (req: Request) => {
+Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
-    return createCorsResponse({}, 204);
+    return new Response(null, { status: 204, headers: CORS_HEADERS });
   }
 
   const url = new URL(req.url);
@@ -82,7 +74,7 @@ Deno.serve(async (req: Request) => {
       return createErrorResponse('仅支持 POST 请求', 405);
     }
 
-    let body: LikeRequest;
+    let body;
     try { body = await req.json(); } catch { return createErrorResponse('请求体必须是有效的 JSON', 400); }
 
     const { image_id, action, user_id } = body;
@@ -126,19 +118,17 @@ Deno.serve(async (req: Request) => {
   }
 });
 
-async function handleGetLikeCounts(): Promise<Response> {
+async function handleGetLikeCounts() {
   const supabase = createServiceClient();
   const { data, error } = await supabase.from('image_likes').select('image_id, count');
   if (error) { console.error('查询点赞计数失败:', error); return createErrorResponse('查询点赞计数失败', 500); }
 
-  const counts: Record<number, number> = {};
-  data?.forEach((item: { image_id: number; count: number }) => { counts[item.image_id] = item.count; });
+  const counts = {};
+  if (data) data.forEach((item) => { counts[item.image_id] = item.count; });
   return createCorsResponse({ success: true, data: counts });
 }
 
-interface LikeResult { success: boolean; message: string; count: number; }
-
-async function handleLikeToggle(supabase: ReturnType<typeof createServiceClient>, imageId: number, action: 'like' | 'unlike', userId: string): Promise<LikeResult> {
+async function handleLikeToggle(supabase, imageId, action, userId) {
   const { data: existing, error: queryError } = await supabase.from('likes').select('id').eq('image_id', imageId).eq('user_id', userId).maybeSingle();
   if (queryError) { console.error('查询点赞记录失败:', queryError); throw new Error('数据库查询失败'); }
 
@@ -164,7 +154,7 @@ async function handleLikeToggle(supabase: ReturnType<typeof createServiceClient>
   }
 }
 
-async function logOperation(supabase: ReturnType<typeof createServiceClient>, action: string, imageId: number, userId: string): Promise<void> {
+async function logOperation(supabase, action, imageId, userId) {
   try {
     await supabase.from('like_logs').insert({ action, image_id: imageId, user_id: userId, created_at: new Date().toISOString() });
   } catch (e) { console.warn('操作日志记录失败:', e); }

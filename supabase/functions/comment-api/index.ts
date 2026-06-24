@@ -7,23 +7,21 @@
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0';
 
-// === 共享：CORS 配置 ===
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
   'Access-Control-Allow-Headers': 'apikey, Authorization, Content-Type, x-client-info',
   'Access-Control-Max-Age': '86400',
 };
-function createCorsResponse(body: unknown, status: number = 200): Response {
+function createCorsResponse(body, status = 200) {
   return new Response(JSON.stringify(body), {
     status, headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
   });
 }
-function createErrorResponse(message: string, status: number = 400): Response {
+function createErrorResponse(message, status = 400) {
   return createCorsResponse({ error: message }, status);
 }
 
-// === 共享：Supabase 客户端 ===
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') || '';
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
 function createServiceClient() {
@@ -32,10 +30,8 @@ function createServiceClient() {
   });
 }
 
-// === 共享：限流器 ===
-interface RateLimitEntry { count: number; resetAt: number; }
-const rateLimitStore = new Map<string, RateLimitEntry>();
-function checkRateLimit(key: string, maxRequests: number = 10, windowMs: number = 60000) {
+const rateLimitStore = new Map();
+function checkRateLimit(key, maxRequests = 10, windowMs = 60000) {
   const now = Date.now();
   const entry = rateLimitStore.get(key);
   if (!entry || now > entry.resetAt) {
@@ -50,15 +46,14 @@ function checkRateLimit(key: string, maxRequests: number = 10, windowMs: number 
   return { allowed: true, remaining: maxRequests - entry.count, resetAt: entry.resetAt };
 }
 
-// 业务常量
 const COMMENT_MAX_PER_MINUTE = 5;
 const COMMENT_WINDOW_MS = 60000;
 const COMMENT_MAX_LENGTH = 1000;
 const PAGE_MAX_SIZE = 50;
 
-Deno.serve(async (req: Request) => {
+Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
-    return createCorsResponse({}, 204);
+    return new Response(null, { status: 204, headers: CORS_HEADERS });
   }
 
   const url = new URL(req.url);
@@ -78,7 +73,7 @@ Deno.serve(async (req: Request) => {
   }
 });
 
-async function handleListComments(url: URL): Promise<Response> {
+async function handleListComments(url) {
   const imageId = parseInt(url.searchParams.get('image_id') || '0');
   const page = Math.max(1, parseInt(url.searchParams.get('page') || '1'));
   const limit = Math.min(PAGE_MAX_SIZE, Math.max(1, parseInt(url.searchParams.get('limit') || '20')));
@@ -111,10 +106,10 @@ async function handleListComments(url: URL): Promise<Response> {
   });
 }
 
-async function handleCreateComment(req: Request): Promise<Response> {
+async function handleCreateComment(req) {
   if (req.method !== 'POST') return createErrorResponse('仅支持 POST 请求', 405);
 
-  let body: { image_id?: number; content?: string; github_username?: string; github_avatar?: string; rating?: number; parent_id?: number | null; };
+  let body;
   try { body = await req.json(); } catch { return createErrorResponse('请求体必须是有效的 JSON', 400); }
 
   const { image_id, content, github_username, github_avatar, rating, parent_id } = body;
@@ -151,10 +146,10 @@ async function handleCreateComment(req: Request): Promise<Response> {
   });
 }
 
-async function handleDeleteComment(req: Request): Promise<Response> {
+async function handleDeleteComment(req) {
   if (req.method !== 'POST' && req.method !== 'DELETE') return createErrorResponse('仅支持 POST/DELETE 请求', 405);
 
-  let body: { comment_id?: number; admin_token?: string };
+  let body;
   try { body = await req.json(); } catch { return createErrorResponse('请求体必须是有效的 JSON', 400); }
 
   const { comment_id, admin_token } = body;
@@ -170,7 +165,7 @@ async function handleDeleteComment(req: Request): Promise<Response> {
   return createCorsResponse({ success: true, message: '评论已删除' });
 }
 
-async function handleGiscusSync(req: Request): Promise<Response> {
+async function handleGiscusSync(req) {
   if (req.method !== 'POST') return createErrorResponse('仅支持 POST 请求', 405);
 
   const payload = await req.json().catch(() => null);
@@ -195,8 +190,8 @@ async function handleGiscusSync(req: Request): Promise<Response> {
   }
 }
 
-async function syncDiscussion(supabase: ReturnType<typeof createServiceClient>, discussion: Record<string, unknown>): Promise<void> {
-  const title = (discussion.title as string) || '';
+async function syncDiscussion(supabase, discussion) {
+  const title = (discussion.title || '');
   const match = title.match(/image[-_]?(\d+)/i);
   const imageId = match ? parseInt(match[1]) : null;
   if (!imageId) { console.log('无法从 Discussion 标题提取 image_id:', title); return; }
@@ -207,28 +202,28 @@ async function syncDiscussion(supabase: ReturnType<typeof createServiceClient>, 
   });
 }
 
-async function syncDiscussionComment(supabase: ReturnType<typeof createServiceClient>, payload: Record<string, unknown>): Promise<void> {
-  const comment = payload.comment as Record<string, unknown>;
-  const discussion = payload.discussion as Record<string, unknown>;
+async function syncDiscussionComment(supabase, payload) {
+  const comment = payload.comment || {};
+  const discussion = payload.discussion || {};
   if (!comment || !discussion) return;
 
-  const title = (discussion.title as string) || '';
+  const title = (discussion.title || '');
   const match = title.match(/image[-_]?(\d+)/i);
   const imageId = match ? parseInt(match[1]) : null;
   if (!imageId) { console.log('无法从 Discussion 标题提取 image_id:', title); return; }
 
-  const user = comment.user as Record<string, unknown> || {};
+  const user = comment.user || {};
 
   const { data: existing } = await supabase.from('comments').select('id').eq('github_comment_id', comment.id).maybeSingle();
   if (existing) { console.log('评论已同步，跳过:', comment.id); return; }
 
   const { error } = await supabase.from('comments').insert({
-    image_id: imageId, content: (comment.body as string) || '',
-    github_username: (user.login as string) || 'GitHub用户',
-    github_avatar: (user.avatar_url as string) || null,
+    image_id: imageId, content: (comment.body || ''),
+    github_username: (user.login || 'GitHub用户'),
+    github_avatar: (user.avatar_url || null),
     github_comment_id: comment.id, github_discussion_id: discussion.id,
     status: 'approved', source: 'giscus',
-    created_at: (comment.created_at as string) || new Date().toISOString(),
+    created_at: (comment.created_at || new Date().toISOString()),
   });
 
   if (error) { console.error('同步评论到数据库失败:', error); throw error; }
@@ -242,12 +237,12 @@ async function syncDiscussionComment(supabase: ReturnType<typeof createServiceCl
   console.log('Giscus 评论同步成功:', comment.id, '-> image_id:', imageId);
 }
 
-async function filterSensitiveWords(text: string): Promise<string> {
+async function filterSensitiveWords(text) {
   const defaultWords = ['脏话', '垃圾', '傻逼', '他妈的'];
   try {
     const supabase = createServiceClient();
     const { data: words } = await supabase.from('sensitive_words').select('word').eq('is_active', true);
-    const sensitiveWords = words?.map((w: { word: string }) => w.word) || [];
+    const sensitiveWords = (words || []).map((w) => w.word);
     const allWords = [...defaultWords, ...sensitiveWords];
     let filtered = text;
     allWords.forEach((word) => {
