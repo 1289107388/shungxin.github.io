@@ -2280,7 +2280,10 @@
           const { data, error } = await fetch(
             window.SUPABASE_CONFIG.url + '/functions/v1/comment-api/list?image_id=' + imageId + '&page=' + page + '&limit=20&sort=' + sort,
             {
-              headers: { 'apikey': window.SUPABASE_CONFIG.anonKey }
+              headers: { 
+                'apikey': window.SUPABASE_CONFIG.anonKey,
+                'Authorization': 'Bearer ' + window.SUPABASE_CONFIG.anonKey
+              }
             }
           ).then(r => r.json());
 
@@ -2378,7 +2381,8 @@
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json',
-                'apikey': window.SUPABASE_CONFIG.anonKey
+                'apikey': window.SUPABASE_CONFIG.anonKey,
+                'Authorization': 'Bearer ' + window.SUPABASE_CONFIG.anonKey
               },
               body: JSON.stringify({
                 image_id: currentImageId,
@@ -2624,8 +2628,11 @@
           try {
             // 通过 Edge Function 获取（前端禁止直连数据库）
             const resp = await fetch(
-              SUPABASE_CONFIG.url + '/functions/v1/like-toggle/counts',
-              { headers: { 'apikey': SUPABASE_CONFIG.anonKey } }
+              window.SUPABASE_CONFIG.url + '/functions/v1/like-toggle/counts',
+              { headers: { 
+                'apikey': window.SUPABASE_CONFIG.anonKey,
+                'Authorization': 'Bearer ' + window.SUPABASE_CONFIG.anonKey
+              } }
             );
             const result = await resp.json();
             if (result.success && result.data) {
@@ -2780,7 +2787,10 @@
             // 通过 Edge Function 获取（前端禁止直连数据库）
             const resp = await fetch(
               window.SUPABASE_CONFIG.url + '/functions/v1/view-count/list',
-              { headers: { 'apikey': window.SUPABASE_CONFIG.anonKey } }
+              { headers: { 
+                'apikey': window.SUPABASE_CONFIG.anonKey,
+                'Authorization': 'Bearer ' + window.SUPABASE_CONFIG.anonKey
+              } }
             );
             const result = await resp.json();
             if (result.success && result.data) {
@@ -2822,6 +2832,7 @@
               headers: {
                 'Content-Type': 'application/json',
                 'apikey': window.SUPABASE_CONFIG.anonKey,
+                'Authorization': 'Bearer ' + window.SUPABASE_CONFIG.anonKey,
               },
               body: JSON.stringify({
                 image_id: imageId,
