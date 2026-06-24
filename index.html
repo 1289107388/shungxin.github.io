@@ -2277,17 +2277,17 @@
         
         try {
           // 调用 Edge Function 获取评论列表
-          const { data, error } = await fetch(
+          const resp = await fetch(
             window.SUPABASE_CONFIG.url + '/functions/v1/comment-api/list?image_id=' + imageId + '&page=' + page + '&limit=20&sort=' + sort,
             {
-              headers: { 
+              headers: {
                 'apikey': window.SUPABASE_CONFIG.anonKey,
                 'Authorization': 'Bearer ' + window.SUPABASE_CONFIG.anonKey
               }
             }
-          ).then(r => r.json());
-
-          if (error) throw new Error(error);
+          );
+          if (!resp.ok) throw new Error('HTTP ' + resp.status);
+          const data = await resp.json();
 
           renderComments(data.data || [], data.pagination);
           updateCommentsCountBadge(data.data?.length || 0);
@@ -2375,7 +2375,7 @@
         btn.textContent = '发送中…';
 
         try {
-          const { data, error } = await fetch(
+          const resp = await fetch(
             window.SUPABASE_CONFIG.url + '/functions/v1/comment-api/create',
             {
               method: 'POST',
@@ -2390,9 +2390,11 @@
                 github_username: '访客' + (localStorage.getItem('visitor_id') || '').slice(-4)
               })
             }
-          ).then(r => r.json());
+          );
+          if (!resp.ok) throw new Error('HTTP ' + resp.status);
+          const data = await resp.json();
 
-          if (error) throw new Error(error);
+          if (!data.success) throw new Error(data.message || data.error || '提交失败');
 
           input.value = '';
           showToast(data.message || '评论发布成功');
@@ -2582,9 +2584,8 @@
   </script>
 
   <!-- ============================
-       Supabase 点赞系统
+       Supabase 点赞系统（纯 fetch 实现，不依赖外部 SDK）
        ============================ -->
-  <script src="https://unpkg.com/@supabase/supabase-js@2.108.2/dist/umd/supabase.js"></script>
   <script>
     (function() {
       'use strict';
@@ -2596,21 +2597,32 @@
       };
       const SUPABASE_CONFIG = window.SUPABASE_CONFIG;
 
+      // 通用 Edge Function 调用（纯 fetch，不依赖 SDK）
+      window.supabaseInvoke = async function(functionName, body) {
+        const url = SUPABASE_CONFIG.url + '/functions/v1/' + functionName;
+        const resp = await fetch(url, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'apikey': SUPABASE_CONFIG.anonKey,
+            'Authorization': 'Bearer ' + SUPABASE_CONFIG.anonKey,
+          },
+          body: JSON.stringify(body || {}),
+        });
+        if (!resp.ok) {
+          const text = await resp.text();
+          throw new Error('HTTP ' + resp.status + ': ' + text);
+        }
+        return await resp.json();
+      };
+
+      // 不再需要 SDK，但为了向后兼容提供 mock
+      const supabaseClient = { functions: { invoke: window.supabaseInvoke } };
+      const supabaseReady = SUPABASE_CONFIG.url !== 'YOUR_SUPABASE_URL' && SUPABASE_CONFIG.anonKey !== 'YOUR_SUPABASE_ANON_KEY';
+
       // 生成访客唯一标识（用于点赞防重复）
       if (!localStorage.getItem('visitor_id')) {
         localStorage.setItem('visitor_id', 'v_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 8));
-      }
-
-      // 初始化 Supabase
-      let supabaseClient = null;
-      let supabaseReady = false;
-      try {
-        if (SUPABASE_CONFIG.url !== 'YOUR_SUPABASE_URL' && SUPABASE_CONFIG.anonKey !== 'YOUR_SUPABASE_ANON_KEY') {
-          supabaseClient = window.supabase.createClient(SUPABASE_CONFIG.url, SUPABASE_CONFIG.anonKey);
-          supabaseReady = true;
-        }
-      } catch (e) {
-        console.warn('Supabase 初始化失败:', e.message);
       }
 
       // 本地点赞状态（用于 UI 显示）
@@ -2678,26 +2690,25 @@
           btn.disabled = true;
 
           const action = isLiked ? 'unlike' : 'like';
-          const { data, error } = await supabaseClient.functions.invoke('like-toggle', {
-            body: {
-              image_id: imageId,
-              action: action,
-              user_id: 'visitor_' + (localStorage.getItem('visitor_id') || ''),
-            }
+          const result = await window.supabaseInvoke('like-toggle', {
+            image_id: imageId,
+            action: action,
+            user_id: 'visitor_' + (localStorage.getItem('visitor_id') || ''),
           });
 
-          if (error) throw new Error(error.message || 'Edge Function 返回错误');
+          if (!result.success) throw new Error(result.message || result.error || 'Edge Function 返回错误');
 
+          const data = result.data || {};
           // 更新 UI
-          if (data.liked) {
+          if (data.action === 'like') {
             localLikes[imageId] = true;
             btn.classList.add('liked');
-            countEl.textContent = currentCount + 1;
+            countEl.textContent = data.count || (currentCount + 1);
             showToast('点赞成功');
           } else {
             localLikes[imageId] = false;
             btn.classList.remove('liked');
-            countEl.textContent = Math.max(0, currentCount - 1);
+            countEl.textContent = data.count || Math.max(0, currentCount - 1);
             showToast('已取消点赞');
           }
 
@@ -2764,10 +2775,12 @@
     (function() {
       'use strict';
 
-      // 获取已初始化的 Supabase 客户端
+      // 获取 Supabase 是否已配置（纯 fetch 实现，不需要 SDK）
       function getSupabaseClient() {
-        if (typeof window.supabase !== 'undefined' && window.SUPABASE_CONFIG) {
-          return window.supabase.createClient(window.SUPABASE_CONFIG.url, window.SUPABASE_CONFIG.anonKey);
+        if (window.SUPABASE_CONFIG &&
+            window.SUPABASE_CONFIG.url !== 'YOUR_SUPABASE_URL' &&
+            window.SUPABASE_CONFIG.anonKey !== 'YOUR_SUPABASE_ANON_KEY') {
+          return { ready: true };
         }
         return null;
       }
