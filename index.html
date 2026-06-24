@@ -2605,17 +2605,26 @@
       // 通用 Edge Function 调用（纯 fetch，不依赖 SDK）
       window.supabaseInvoke = async function(functionName, body) {
         const url = SUPABASE_CONFIG.url + '/functions/v1/' + functionName;
-        const resp = await fetch(url, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'apikey': SUPABASE_CONFIG.anonKey,
-            'Authorization': 'Bearer ' + SUPABASE_CONFIG.anonKey,
-          },
-          body: JSON.stringify(body || {}),
-        });
+        console.log('[supabaseInvoke] POST', url, body);
+        let resp;
+        try {
+          resp = await fetch(url, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'apikey': SUPABASE_CONFIG.anonKey,
+              'Authorization': 'Bearer ' + SUPABASE_CONFIG.anonKey,
+            },
+            body: JSON.stringify(body || {}),
+          });
+        } catch (networkErr) {
+          console.error('[supabaseInvoke] 网络错误:', networkErr.message, networkErr);
+          throw new Error('网络错误: ' + networkErr.message);
+        }
+        console.log('[supabaseInvoke] 响应:', resp.status, resp.statusText);
         if (!resp.ok) {
           const text = await resp.text();
+          console.error('[supabaseInvoke] HTTP错误:', resp.status, text);
           throw new Error('HTTP ' + resp.status + ': ' + text);
         }
         return await resp.json();
@@ -2731,7 +2740,7 @@
             countEl.textContent = currentCount + 1;
           }
           localStorage.setItem('shungxin_likes', JSON.stringify(localLikes));
-          showToast('网络异常，已离线更新');
+          showToast('网络异常: ' + e.message + ' (已离线更新)');
         } finally {
           btn.disabled = false;
         }
