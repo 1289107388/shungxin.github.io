@@ -2278,9 +2278,9 @@
         try {
           // 调用 Edge Function 获取评论列表
           const { data, error } = await fetch(
-            SUPABASE_CONFIG.url + '/functions/v1/comment-api/list?image_id=' + imageId + '&page=' + page + '&limit=20&sort=' + sort,
+            window.SUPABASE_CONFIG.url + '/functions/v1/comment-api/list?image_id=' + imageId + '&page=' + page + '&limit=20&sort=' + sort,
             {
-              headers: { 'apikey': SUPABASE_CONFIG.anonKey }
+              headers: { 'apikey': window.SUPABASE_CONFIG.anonKey }
             }
           ).then(r => r.json());
 
@@ -2373,12 +2373,12 @@
 
         try {
           const { data, error } = await fetch(
-            SUPABASE_CONFIG.url + '/functions/v1/comment-api/create',
+            window.SUPABASE_CONFIG.url + '/functions/v1/comment-api/create',
             {
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json',
-                'apikey': SUPABASE_CONFIG.anonKey
+                'apikey': window.SUPABASE_CONFIG.anonKey
               },
               body: JSON.stringify({
                 image_id: currentImageId,
@@ -2585,11 +2585,12 @@
     (function() {
       'use strict';
 
-      // === Supabase 配置 ===
-      const SUPABASE_CONFIG = {
+      // === Supabase 配置（暴露到全局，供其他 IIFE 使用） ===
+      window.SUPABASE_CONFIG = {
         url: 'https://qlhfyawbyedhqokivezn.supabase.co',
         anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFsaGZ5YXdieWVkaHFva2l2ZXpuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODIyODUyNTUsImV4cCI6MjA5Nzg2MTI1NX0.uJF2_JLDl2cDruSYeHAg4r6ZxZRbsgqhW_xfZ3YZ_Kk',
       };
+      const SUPABASE_CONFIG = window.SUPABASE_CONFIG;
 
       // 生成访客唯一标识（用于点赞防重复）
       if (!localStorage.getItem('visitor_id')) {
@@ -2758,8 +2759,8 @@
 
       // 获取已初始化的 Supabase 客户端
       function getSupabaseClient() {
-        if (typeof window.supabase !== 'undefined' && SUPABASE_CONFIG) {
-          return window.supabase.createClient(SUPABASE_CONFIG.url, SUPABASE_CONFIG.anonKey);
+        if (typeof window.supabase !== 'undefined' && window.SUPABASE_CONFIG) {
+          return window.supabase.createClient(window.SUPABASE_CONFIG.url, window.SUPABASE_CONFIG.anonKey);
         }
         return null;
       }
@@ -2778,8 +2779,8 @@
           try {
             // 通过 Edge Function 获取（前端禁止直连数据库）
             const resp = await fetch(
-              SUPABASE_CONFIG.url + '/functions/v1/view-count/list',
-              { headers: { 'apikey': SUPABASE_CONFIG.anonKey } }
+              window.SUPABASE_CONFIG.url + '/functions/v1/view-count/list',
+              { headers: { 'apikey': window.SUPABASE_CONFIG.anonKey } }
             );
             const result = await resp.json();
             if (result.success && result.data) {
@@ -2815,12 +2816,12 @@
         try {
           // 通过 Edge Function 增加浏览量（前端禁止直连数据库）
           const resp = await fetch(
-            SUPABASE_CONFIG.url + '/functions/v1/view-count/increment',
+            window.SUPABASE_CONFIG.url + '/functions/v1/view-count/increment',
             {
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json',
-                'apikey': SUPABASE_CONFIG.anonKey,
+                'apikey': window.SUPABASE_CONFIG.anonKey,
               },
               body: JSON.stringify({
                 image_id: imageId,
