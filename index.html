@@ -2449,7 +2449,7 @@
         if (toolbar) toolbar.style.display = 'flex';
         
         // 提取图片ID并加载评论
-        const imageId = threadKey.replace('image-', '');
+        const imageId = parseInt(threadKey.replace('image-', ''), 10);
         if (imageId && imageId !== 'site') {
           loadCommentsFor(imageId, 1, 'newest');
         } else {
