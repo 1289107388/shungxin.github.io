@@ -4,6 +4,18 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>双薪写真画廊</title>
+  <meta name="description" content="双薪写真画廊 - 记录美好瞬间，定格珍贵回忆">
+  <meta property="og:title" content="双薪写真画廊">
+  <meta property="og:description" content="记录美好瞬间，定格珍贵回忆 — 悬停感受光晕与视差">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://shungxin.github.io/">
+  <meta property="og:image" content="https://shungxin.github.io/images/1782210152459.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="双薪写真画廊">
+  <meta name="twitter:description" content="记录美好瞬间，定格珍贵回忆">
+  <meta name="twitter:image" content="https://shungxin.github.io/images/1782210152459.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -49,6 +61,35 @@
       --space-3xl: 64px;
       --space-section: 96px;
       --ease-stellar: cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    /* ============================
+       Light Theme Variables
+       ============================ */
+    [data-theme="light"] {
+      --color-accent: #B8923E;
+      --color-accent-glow: #D4A853;
+      --color-accent-soft: rgba(184, 146, 62, 0.15);
+      --color-bg-deep: #F5F5F7;
+      --color-bg-surface: #FFFFFF;
+      --color-bg-card: #FFFFFF;
+      --color-bg-overlay: rgba(245, 245, 247, 0.95);
+      --color-interactive: #B8923E;
+      --color-interactive-hover: #A07F34;
+      --color-gray-100: #1A1A1E;
+      --color-gray-200: #3C3C44;
+      --color-gray-300: #686878;
+      --color-gray-400: #9898A6;
+      --color-gray-500: #C8C8D0;
+      --color-gray-600: #E0E0E8;
+      --color-gray-700: #F0F0F5;
+      --color-border-default: #E0E0E8;
+      --color-border-glow: #B8923E;
+      --color-border-strong: #C8C8D0;
+      --shadow-card-hover: 0 4px 24px rgba(0,0,0,0.1), 0 0 20px rgba(184,146,62,0.1);
+      --shadow-lightbox: 0 16px 60px rgba(0,0,0,0.15);
+      --shadow-toolbar: 0 -4px 20px rgba(0,0,0,0.1);
+      --shadow-glow: 0 0 20px rgba(184,146,62,0.15);
     }
 
     *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
@@ -98,6 +139,123 @@
     .gallery-filters { display: flex; gap: var(--space-sm); margin-top: var(--space-lg); flex-wrap: wrap; }
     .filter-btn { font-family: var(--font-body); font-size: 13px; font-weight: 500; letter-spacing: 0.02em; background: rgba(212, 168, 83, 0.1); color: var(--color-accent); border: 1px solid rgba(212, 168, 83, 0.2); border-radius: 9999px; padding: 6px 16px; cursor: pointer; transition: all 200ms var(--ease-stellar); }
     .filter-btn:hover, .filter-btn.active { background: var(--color-accent); color: var(--color-bg-deep); border-color: var(--color-accent); }
+
+    /* ============================
+       Sorting Controls
+       ============================ */
+    .gallery-sorting { display: flex; align-items: center; gap: var(--space-md); margin-top: var(--space-md); flex-wrap: wrap; }
+    .sort-label { font-size: 13px; font-weight: 500; color: var(--color-gray-300); }
+    .sort-btn { font-family: var(--font-body); font-size: 12px; font-weight: 500; letter-spacing: 0.02em; background: transparent; color: var(--color-gray-300); border: 1px solid var(--color-border-strong); border-radius: 6px; padding: 5px 12px; cursor: pointer; transition: all 200ms var(--ease-stellar); display: flex; align-items: center; gap: 4px; }
+    .sort-btn:hover { border-color: var(--color-accent); color: var(--color-accent); }
+    .sort-btn.active { background: var(--color-accent); color: var(--color-bg-deep); border-color: var(--color-accent); }
+    .sort-btn svg { width: 12px; height: 12px; }
+
+    /* ============================
+       Theme Toggle
+       ============================ */
+    .theme-toggle {
+      width: 40px; height: 40px; border-radius: 50%;
+      background: rgba(212, 168, 83, 0.1); border: 1px solid rgba(212, 168, 83, 0.2);
+      cursor: pointer; display: flex; align-items: center; justify-content: center;
+      transition: all 200ms var(--ease-stellar); color: var(--color-accent);
+      flex-shrink: 0;
+    }
+    .theme-toggle:hover { background: rgba(212, 168, 83, 0.2); border-color: var(--color-accent); }
+    .theme-toggle svg { width: 18px; height: 18px; }
+    .theme-toggle .sun-icon { display: none; }
+    [data-theme="light"] .theme-toggle .moon-icon { display: none; }
+    [data-theme="light"] .theme-toggle .sun-icon { display: block; }
+
+    /* ============================
+       Skeleton Loading
+       ============================ */
+    .skeleton-card {
+      background: var(--color-bg-card);
+      border: 1px solid var(--color-border-default);
+      border-radius: 12px;
+      overflow: hidden;
+      padding: 0;
+      break-inside: avoid;
+      margin-bottom: var(--space-lg);
+      display: inline-block;
+      width: 100%;
+      position: relative;
+    }
+    .skeleton-shimmer {
+      position: absolute; inset: 0;
+      background: linear-gradient(90deg,
+        var(--color-bg-card) 0%,
+        var(--color-gray-600) 20%,
+        var(--color-gray-500) 40%,
+        var(--color-gray-600) 60%,
+        var(--color-bg-card) 100%
+      );
+      background-size: 200% 100%;
+      animation: skeleton-wave 1.5s ease-in-out infinite;
+    }
+    @keyframes skeleton-wave {
+      0% { background-position: 200% 0; }
+      100% { background-position: -200% 0; }
+    }
+    .skeleton-img {
+      width: 100%; padding-top: 75%;
+      background: var(--color-bg-card);
+      position: relative;
+    }
+    .skeleton-info {
+      padding: var(--space-md);
+      position: relative;
+    }
+    .skeleton-title {
+      height: 20px; width: 60%; border-radius: 4px;
+      background: var(--color-gray-600); margin-bottom: var(--space-sm);
+    }
+    .skeleton-meta {
+      height: 14px; width: 40%; border-radius: 4px;
+      background: var(--color-gray-600);
+    }
+    [data-theme="light"] .skeleton-shimmer {
+      background: linear-gradient(90deg,
+        var(--color-gray-200) 0%,
+        var(--color-gray-300) 20%,
+        var(--color-gray-200) 40%,
+        var(--color-gray-300) 60%,
+        var(--color-gray-200) 100%
+      );
+      background-size: 200% 100%;
+    }
+    [data-theme="light"] .skeleton-title,
+    [data-theme="light"] .skeleton-meta {
+      background: var(--color-gray-200);
+    }
+
+    /* ============================
+       Image Fade In Animation
+       ============================ */
+    .image-card-img.fade-in {
+      animation: img-fade-in 600ms var(--ease-stellar) forwards;
+    }
+    @keyframes img-fade-in {
+      from { opacity: 0; transform: scale(0.98); }
+      to { opacity: 1; transform: scale(1); }
+    }
+
+    /* ============================
+       View Count Badge
+       ============================ */
+    .view-count-badge {
+      position: absolute; bottom: var(--space-md); right: var(--space-md); z-index: 3;
+      display: flex; align-items: center; gap: 4px;
+      font-size: 11px; font-weight: 500; color: var(--color-gray-300);
+      background: rgba(24, 24, 32, 0.75);
+      backdrop-filter: blur(8px); padding: 3px 8px;
+      border-radius: 9999px;
+    }
+    .view-count-badge svg { width: 12px; height: 12px; opacity: 0.7; }
+    [data-theme="light"] .view-count-badge {
+      background: rgba(255, 255, 255, 0.85);
+      color: var(--color-gray-400);
+    }
     /* Masonry waterfall grid — CSS columns approach */
     .gallery-grid {
       max-width: 1400px; margin: 0 auto; padding: 0 var(--space-xl);
@@ -769,6 +927,191 @@
 </head>
 <body>
 
+  <!-- 密码保护界面 -->
+  <div class="password-overlay" id="passwordOverlay">
+    <div class="password-modal">
+      <div class="password-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+          <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+        </svg>
+      </div>
+      <h2 class="password-title">双薪写真画廊</h2>
+      <p class="password-desc">请输入访问密码</p>
+      <form class="password-form" id="passwordForm">
+        <input 
+          type="password" 
+          id="passwordInput" 
+          class="password-input" 
+          placeholder="请输入密码" 
+          autocomplete="off"
+          required
+        >
+        <button type="submit" class="password-btn">进入画廊</button>
+      </form>
+      <p class="password-error" id="passwordError" style="display:none;">密码错误，请重试</p>
+    </div>
+  </div>
+
+  <style>
+    /* 密码保护界面样式 */
+    .password-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(135deg, var(--color-bg-deep) 0%, var(--color-bg-surface) 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 10000;
+      opacity: 1;
+      transition: opacity 0.5s ease;
+    }
+    .password-overlay.unlocked {
+      opacity: 0;
+      pointer-events: none;
+    }
+    .password-modal {
+      background: var(--color-bg-card);
+      border: 1px solid var(--color-border-default);
+      border-radius: 16px;
+      padding: 48px 40px;
+      text-align: center;
+      max-width: 400px;
+      width: 90%;
+      box-shadow: var(--shadow-lightbox);
+    }
+    .password-icon {
+      width: 64px;
+      height: 64px;
+      margin: 0 auto 24px;
+      background: var(--color-accent-soft);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .password-icon svg {
+      width: 32px;
+      height: 32px;
+      stroke: var(--color-accent);
+    }
+    .password-title {
+      font-size: 24px;
+      font-weight: 600;
+      color: var(--color-gray-100);
+      margin-bottom: 8px;
+    }
+    .password-desc {
+      font-size: 14px;
+      color: var(--color-gray-400);
+      margin-bottom: 32px;
+    }
+    .password-form {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+    .password-input {
+      width: 100%;
+      padding: 14px 18px;
+      font-size: 16px;
+      background: var(--color-bg-deep);
+      border: 1px solid var(--color-border-default);
+      border-radius: 10px;
+      color: var(--color-gray-100);
+      outline: none;
+      transition: border-color 0.3s ease, box-shadow 0.3s ease;
+    }
+    .password-input:focus {
+      border-color: var(--color-accent);
+      box-shadow: 0 0 0 3px var(--color-accent-soft);
+    }
+    .password-input::placeholder {
+      color: var(--color-gray-500);
+    }
+    .password-btn {
+      width: 100%;
+      padding: 14px 24px;
+      font-size: 16px;
+      font-weight: 600;
+      background: var(--color-accent);
+      color: #000;
+      border: none;
+      border-radius: 10px;
+      cursor: pointer;
+      transition: background 0.3s ease, transform 0.2s ease;
+    }
+    .password-btn:hover {
+      background: var(--color-accent-glow);
+      transform: translateY(-1px);
+    }
+    .password-btn:active {
+      transform: translateY(0);
+    }
+    .password-error {
+      color: var(--color-error);
+      font-size: 14px;
+      margin-top: 12px;
+      animation: shake 0.5s ease;
+    }
+    @keyframes shake {
+      0%, 100% { transform: translateX(0); }
+      25% { transform: translateX(-8px); }
+      75% { transform: translateX(8px); }
+    }
+  </style>
+
+  <script>
+    // 密码保护功能
+    (function() {
+      const CORRECT_PASSWORD = 'hsx123';
+      const STORAGE_KEY = 'gallery_access';
+      
+      // 检查是否已经验证过
+      if (localStorage.getItem(STORAGE_KEY) === CORRECT_PASSWORD) {
+        document.getElementById('passwordOverlay').classList.add('unlocked');
+        document.getElementById('passwordOverlay').style.display = 'none';
+        return;
+      }
+      
+      const form = document.getElementById('passwordForm');
+      const input = document.getElementById('passwordInput');
+      const errorMsg = document.getElementById('passwordError');
+      const overlay = document.getElementById('passwordOverlay');
+      
+      form.addEventListener('submit', function(e) {
+        e.preventDefault();
+        const password = input.value;
+        
+        if (password === CORRECT_PASSWORD) {
+          localStorage.setItem(STORAGE_KEY, password);
+          overlay.classList.add('unlocked');
+          setTimeout(function() {
+            overlay.style.display = 'none';
+          }, 500);
+        } else {
+          errorMsg.style.display = 'block';
+          input.value = '';
+          input.focus();
+          // 3秒后隐藏错误消息
+          setTimeout(function() {
+            errorMsg.style.display = 'none';
+          }, 3000);
+        }
+      });
+      
+      // 回车键快速提交
+      input.addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') {
+          form.dispatchEvent(new Event('submit'));
+        }
+      });
+    })();
+  </script>
+
   <div class="scroll-progress" id="scrollProgress" style="width: 0%;"></div>
   <canvas id="particle-canvas"></canvas>
 
@@ -785,7 +1128,13 @@
         </button>
       </li>
     </ul>
-    <button class="nav-hamburger" id="navHamburger" aria-label="Menu">☰</button>
+    <div style="display:flex;align-items:center;gap:8px;">
+      <button class="theme-toggle" id="themeToggle" aria-label="切换主题" title="切换深色/浅色主题">
+        <svg class="moon-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+        <svg class="sun-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+      </button>
+      <button class="nav-hamburger" id="navHamburger" aria-label="Menu">☰</button>
+    </div>
   </nav>
 
   <div class="mobile-nav-overlay" id="mobileNav">
@@ -806,6 +1155,21 @@
         <button class="filter-btn" data-filter="urban">城市</button>
         <button class="filter-btn" data-filter="portrait">人像</button>
         <button class="filter-btn" data-filter="nature">自然</button>
+      </div>
+      <div class="gallery-sorting">
+        <span class="sort-label">排序：</span>
+        <button class="sort-btn active" data-sort="default" title="默认顺序">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="15" y2="12"/><line x1="3" y1="18" x2="18" y2="18"/></svg>
+          默认
+        </button>
+        <button class="sort-btn" data-sort="likes" title="按点赞数排序">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+          点赞
+        </button>
+        <button class="sort-btn" data-sort="views" title="按浏览量排序">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+          浏览
+        </button>
       </div>
     </div>
     <div class="gallery-grid" id="galleryGrid"></div>
@@ -932,46 +1296,107 @@
        Image Data
        ============================ */
     const imageData = [
-      { id: 1, src: 'images/1782210152459.png', title: '人像作品 01', category: 'portrait', date: '', location: '', isNew: true },
-      { id: 2, src: 'images/1782210158805.png', title: '人像作品 02', category: 'portrait', date: '', location: '', isNew: true },
-      { id: 3, src: 'images/1782210635533.png', title: '人像作品 03', category: 'portrait', date: '', location: '', isNew: false },
-      { id: 4, src: 'images/1782210771450.png', title: '人像作品 04', category: 'portrait', date: '', location: '', isNew: false },
-      { id: 5, src: 'images/1782210897284.png', title: '人像作品 05', category: 'portrait', date: '', location: '', isNew: false },
-      { id: 6, src: 'images/1782210910862.png', title: '人像作品 06', category: 'portrait', date: '', location: '', isNew: false },
-      { id: 7, src: 'images/1782210999263.png', title: '人像作品 07', category: 'portrait', date: '', location: '', isNew: false },
-      { id: 8, src: 'images/1782211128132.png', title: '人像作品 08', category: 'portrait', date: '', location: '', isNew: false },
-      { id: 9, src: 'images/1782211157173.png', title: '人像作品 09', category: 'portrait', date: '', location: '', isNew: false },
-      { id: 10, src: 'images/7afeddec7b88421123646b810764342e.jpg', title: '人像作品 10', category: 'portrait', date: '', location: '', isNew: false },
-      { id: 11, src: 'images/7fc0057e819cc7f9a81da2b882e6e9a6.jpg', title: '人像作品 11', category: 'portrait', date: '', location: '', isNew: false },
-      { id: 12, src: 'images/893b23a3e941a070a5a9916fdb95ea9a.jpg', title: '人像作品 12', category: 'portrait', date: '', location: '', isNew: false },
-      { id: 13, src: 'images/f8bd7ec8f44cfc651eb30595a02c6c7a.jpg', title: '人像作品 13', category: 'portrait', date: '', location: '', isNew: false },
-      { id: 14, src: 'images/119064098755adadd4f2ba0b34d069b1.jpg', title: '人像作品 14', category: 'portrait', date: '', location: '', isNew: false },
-      { id: 15, src: 'images/122d3967ac65825bd54b528e53d5b805.jpg', title: '人像作品 15', category: 'portrait', date: '', location: '', isNew: false },
+      { id: 1, src: 'images/1782210152459.png', title: '人像作品 01', category: 'portrait', date: '', location: '', isNew: true, views: 0, likes: 0 },
+      { id: 2, src: 'images/1782210158805.png', title: '人像作品 02', category: 'portrait', date: '', location: '', isNew: true, views: 0, likes: 0 },
+      { id: 3, src: 'images/1782210635533.png', title: '人像作品 03', category: 'portrait', date: '', location: '', isNew: false, views: 0, likes: 0 },
+      { id: 4, src: 'images/1782210771450.png', title: '人像作品 04', category: 'portrait', date: '', location: '', isNew: false, views: 0, likes: 0 },
+      { id: 5, src: 'images/1782210897284.png', title: '人像作品 05', category: 'portrait', date: '', location: '', isNew: false, views: 0, likes: 0 },
+      { id: 6, src: 'images/1782210910862.png', title: '人像作品 06', category: 'portrait', date: '', location: '', isNew: false, views: 0, likes: 0 },
+      { id: 7, src: 'images/1782210999263.png', title: '人像作品 07', category: 'portrait', date: '', location: '', isNew: false, views: 0, likes: 0 },
+      { id: 8, src: 'images/1782211128132.png', title: '人像作品 08', category: 'portrait', date: '', location: '', isNew: false, views: 0, likes: 0 },
+      { id: 9, src: 'images/1782211157173.png', title: '人像作品 09', category: 'portrait', date: '', location: '', isNew: false, views: 0, likes: 0 },
+      { id: 10, src: 'images/7afeddec7b88421123646b810764342e.jpg', title: '人像作品 10', category: 'portrait', date: '', location: '', isNew: false, views: 0, likes: 0 },
+      { id: 11, src: 'images/7fc0057e819cc7f9a81da2b882e6e9a6.jpg', title: '人像作品 11', category: 'portrait', date: '', location: '', isNew: false, views: 0, likes: 0 },
+      { id: 12, src: 'images/893b23a3e941a070a5a9916fdb95ea9a.jpg', title: '人像作品 12', category: 'portrait', date: '', location: '', isNew: false, views: 0, likes: 0 },
+      { id: 13, src: 'images/f8bd7ec8f44cfc651eb30595a02c6c7a.jpg', title: '人像作品 13', category: 'portrait', date: '', location: '', isNew: false, views: 0, likes: 0 },
+      { id: 14, src: 'images/119064098755adadd4f2ba0b34d069b1.jpg', title: '人像作品 14', category: 'portrait', date: '', location: '', isNew: false, views: 0, likes: 0 },
+      { id: 15, src: 'images/122d3967ac65825bd54b528e53d5b805.jpg', title: '人像作品 15', category: 'portrait', date: '', location: '', isNew: false, views: 0, likes: 0 },
     ];
+
+    // CDN URL 优化函数（为 Unsplash 图片添加 CDN 参数）
+    function getOptimizedImageUrl(src, width = 800) {
+      if (src.includes('unsplash.com')) {
+        const separator = src.includes('?') ? '&' : '?';
+        return `${src}${separator}w=${width}&q=80&auto=format&fit=crop`;
+      }
+      return src;
+    }
 
     /* ============================
        Gallery Rendering
        ============================ */
     const galleryGrid = document.getElementById('galleryGrid');
     let currentFilter = 'all';
+    let currentSort = 'default';
     let filteredImages = [...imageData];
-    let longpressTargetImg = null; // store image data for long-press menu
+    let sortedImages = [...imageData];
+    let longpressTargetImg = null;
+    let likeCountsData = {};
+    let viewCountsData = {};
 
     function getCategoryLabel(cat) {
       const labels = { landscape: '风景', urban: '城市', portrait: '人像', nature: '自然' };
       return labels[cat] || cat;
     }
 
+    // 显示骨架屏
+    function showSkeletonLoading() {
+      const skeletonCount = 6;
+      galleryGrid.innerHTML = '';
+      for (let i = 0; i < skeletonCount; i++) {
+        const skeleton = document.createElement('div');
+        skeleton.className = 'skeleton-card';
+        skeleton.innerHTML = `
+          <div class="skeleton-img"><div class="skeleton-shimmer"></div></div>
+          <div class="skeleton-info">
+            <div class="skeleton-title"></div>
+            <div class="skeleton-meta"></div>
+          </div>
+        `;
+        galleryGrid.appendChild(skeleton);
+      }
+    }
+
+    // 排序函数
+    function sortImages(images, sortBy) {
+      const sorted = [...images];
+      switch (sortBy) {
+        case 'likes':
+          return sorted.sort((a, b) => {
+            const likesA = likeCountsData[a.id] || a.likes || 0;
+            const likesB = likeCountsData[b.id] || b.likes || 0;
+            return likesB - likesA;
+          });
+        case 'views':
+          return sorted.sort((a, b) => {
+            const viewsA = viewCountsData[a.id] || a.views || 0;
+            const viewsB = viewCountsData[b.id] || b.views || 0;
+            return viewsB - viewsA;
+          });
+        default:
+          return sorted.sort((a, b) => a.id - b.id);
+      }
+    }
+
     function renderGallery(filter) {
       currentFilter = filter;
       filteredImages = filter === 'all' ? [...imageData] : imageData.filter(img => img.category === filter);
+      applySortingAndRender();
+    }
+
+    function applySortingAndRender() {
+      sortedImages = sortImages(filteredImages, currentSort);
       galleryGrid.innerHTML = '';
 
-      filteredImages.forEach((img, index) => {
+      sortedImages.forEach((img, index) => {
         const card = document.createElement('div');
         card.className = 'image-card';
         card.dataset.index = index;
         card.dataset.id = img.id;
+
+        // 获取点赞数和浏览数
+        const likes = likeCountsData[img.id] || img.likes || 0;
+        const views = viewCountsData[img.id] || img.views || 0;
 
         card.innerHTML = `
           <div class="glow-border"></div>
@@ -979,7 +1404,7 @@
             <div class="image-card-actions">
               <button class="card-action-btn like-btn" title="点赞" aria-label="Like image" data-id="${img.id}">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
-                <span class="like-count" data-id="${img.id}">0</span>
+                <span class="like-count" data-id="${img.id}">${likes}</span>
               </button>
               <button class="card-action-btn save-btn" title="保存" aria-label="Save image">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
@@ -988,11 +1413,17 @@
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
               </button>
             </div>
-            <img class="image-card-img img-loading" src="${img.src}" alt="${img.title}" loading="lazy">
+            <img class="image-card-img img-loading" src="${img.src}" alt="${img.title}" loading="lazy" data-src="${img.src}">
             <div class="image-card-badge">
               <span class="badge-category">${getCategoryLabel(img.category)}</span>
               ${img.isNew ? '<span class="badge-new">NEW</span>' : ''}
             </div>
+            ${views > 0 ? `
+            <div class="view-count-badge">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+              <span class="view-count-number">${views}</span>
+            </div>
+            ` : ''}
             <div class="image-card-info">
               <div class="image-card-title">${img.title}</div>
               <div class="image-card-meta">${img.date && img.location ? img.date + ' · ' + img.location : img.date || img.location || ''}</div>
@@ -1038,7 +1469,13 @@
         card.querySelector('.share-btn').addEventListener('click', (e) => { e.stopPropagation(); shareImage(img); });
 
         const imgEl = card.querySelector('.image-card-img');
-        imgEl.addEventListener('load', () => { imgEl.classList.remove('img-loading'); });
+        imgEl.addEventListener('load', () => {
+          imgEl.classList.remove('img-loading');
+          imgEl.classList.add('fade-in');
+        });
+        imgEl.addEventListener('error', () => {
+          imgEl.classList.remove('img-loading');
+        });
 
         // === Long Press on mobile ===
         let longPressTimer;
@@ -1083,9 +1520,48 @@
       btn.addEventListener('click', () => {
         document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
-        renderGallery(btn.dataset.filter);
+        showSkeletonLoading();
+        setTimeout(() => renderGallery(btn.dataset.filter), 150);
       });
     });
+
+    /* ============================
+       Sorting Buttons
+       ============================ */
+    document.querySelectorAll('.sort-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.sort-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        currentSort = btn.dataset.sort;
+        applySortingAndRender();
+        observeCards();
+      });
+    });
+
+    /* ============================
+       Theme Toggle
+       ============================ */
+    function initTheme() {
+      const savedTheme = localStorage.getItem('shungxin_theme');
+      if (savedTheme) {
+        document.documentElement.setAttribute('data-theme', savedTheme);
+      } else {
+        // 默认跟随系统主题
+        const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        document.documentElement.setAttribute('data-theme', prefersDark ? 'dark' : 'light');
+      }
+    }
+
+    function toggleTheme() {
+      const currentTheme = document.documentElement.getAttribute('data-theme');
+      const newTheme = currentTheme === 'light' ? 'dark' : 'light';
+      document.documentElement.setAttribute('data-theme', newTheme);
+      localStorage.setItem('shungxin_theme', newTheme);
+      showToast(newTheme === 'light' ? '已切换到浅色主题' : '已切换到深色主题');
+    }
+
+    initTheme();
+    document.getElementById('themeToggle').addEventListener('click', toggleTheme);
 
     /* ============================
        Long Press Context Menu
@@ -1116,7 +1592,7 @@
     });
     document.getElementById('lpView').addEventListener('click', () => {
       if (longpressTargetImg) {
-        const idx = filteredImages.findIndex(i => i.id === longpressTargetImg.id);
+        const idx = sortedImages.findIndex(i => i.id === longpressTargetImg.id);
         if (idx >= 0) openLightbox(idx);
       }
       hideLongpressMenu();
@@ -1299,13 +1775,18 @@
 
     function openLightbox(index) {
       currentLightboxIndex = index;
-      const img = filteredImages[index];
+      const img = sortedImages[index];
       lightboxImg.src = img.src;
       lightbox.classList.remove('hidden');
       document.body.style.overflow = 'hidden';
       resetZoom();
-      if (index + 1 < filteredImages.length) new Image().src = filteredImages[index + 1].src;
-      if (index - 1 >= 0) new Image().src = filteredImages[index - 1].src;
+      if (index + 1 < sortedImages.length) new Image().src = sortedImages[index + 1].src;
+      if (index - 1 >= 0) new Image().src = sortedImages[index - 1].src;
+
+      // 记录浏览量
+      if (typeof incrementViewCount === 'function') {
+        incrementViewCount(img.id);
+      }
 
       // Show zoom hint after a moment
       setTimeout(() => { lightboxZoomHint.classList.add('show'); }, 500);
@@ -1322,17 +1803,17 @@
     function navigateLightbox(dir) {
       if (currentLightboxIndex < 0) return;
       let newIndex = currentLightboxIndex + dir;
-      if (newIndex < 0) newIndex = filteredImages.length - 1;
-      if (newIndex >= filteredImages.length) newIndex = 0;
+      if (newIndex < 0) newIndex = sortedImages.length - 1;
+      if (newIndex >= sortedImages.length) newIndex = 0;
       resetZoom();
       lightboxImg.style.opacity = '0';
       setTimeout(() => {
         currentLightboxIndex = newIndex;
-        const img = filteredImages[newIndex];
+        const img = sortedImages[newIndex];
         lightboxImg.src = img.src;
         lightboxImg.style.opacity = '1';
-        if (newIndex + 1 < filteredImages.length) new Image().src = filteredImages[newIndex + 1].src;
-        if (newIndex - 1 >= 0) new Image().src = filteredImages[newIndex - 1].src;
+        if (newIndex + 1 < sortedImages.length) new Image().src = sortedImages[newIndex + 1].src;
+        if (newIndex - 1 >= 0) new Image().src = sortedImages[newIndex - 1].src;
         setTimeout(() => { lightboxZoomHint.classList.add('show'); }, 500);
         setTimeout(() => { lightboxZoomHint.classList.remove('show'); }, 3500);
       }, 150);
@@ -1504,10 +1985,10 @@
 
     // Save/Share in lightbox
     document.getElementById('lightboxSave').addEventListener('click', () => {
-      if (currentLightboxIndex >= 0) saveImage(filteredImages[currentLightboxIndex]);
+      if (currentLightboxIndex >= 0) saveImage(sortedImages[currentLightboxIndex]);
     });
     document.getElementById('lightboxShare').addEventListener('click', () => {
-      if (currentLightboxIndex >= 0) shareImage(filteredImages[currentLightboxIndex]);
+      if (currentLightboxIndex >= 0) shareImage(sortedImages[currentLightboxIndex]);
     });
 
     /* ============================
@@ -1591,7 +2072,9 @@
     /* ============================
        Init
        ============================ */
-    renderGallery('all');
+    // 首次加载显示骨架屏
+    showSkeletonLoading();
+    setTimeout(() => renderGallery('all'), 300);
 
     /* ============================
        Music Player Controls
@@ -2128,6 +2611,7 @@
       // === 初始化点赞 UI ===
       async function initLikesUI() {
         const counts = await loadAllLikeCounts();
+        likeCountsData = { ...counts };
 
         // 更新所有点赞按钮状态和计数
         document.querySelectorAll('.like-btn').forEach(btn => {
@@ -2159,6 +2643,155 @@
       window.loadAllLikeCounts = loadAllLikeCounts;
       window.initLikesUI = initLikesUI;
       window.supabaseReady = supabaseReady;
+    })();
+
+    /* ============================
+       Supabase 浏览量统计系统
+       ============================ */
+    (function() {
+      'use strict';
+
+      // 获取已初始化的 Supabase 客户端
+      function getSupabaseClient() {
+        if (typeof window.supabase !== 'undefined' && SUPABASE_CONFIG) {
+          return window.supabase.createClient(SUPABASE_CONFIG.url, SUPABASE_CONFIG.anonKey);
+        }
+        return null;
+      }
+
+      // === 批量获取所有图片浏览量 ===
+      async function loadAllViewCounts() {
+        const counts = {};
+        const client = getSupabaseClient();
+
+        if (!client) {
+          // 演示模式：随机生成浏览量
+          imageData.forEach(img => {
+            counts[img.id] = Math.floor(Math.random() * 500) + 10;
+          });
+        } else {
+          try {
+            const { data, error } = await client
+              .from('image_views')
+              .select('image_id, count');
+            if (error) throw error;
+            if (data) {
+              data.forEach(item => {
+                counts[item.image_id] = item.count;
+              });
+            }
+          } catch (e) {
+            console.warn('获取浏览量失败:', e.message);
+          }
+        }
+        return counts;
+      }
+
+      // === 增加浏览量 ===
+      async function incrementViewCount(imageId) {
+        const client = getSupabaseClient();
+
+        // 本地记录已浏览的图片（避免重复计数）
+        const viewedKey = 'shungxin_viewed_' + imageId;
+        if (localStorage.getItem(viewedKey)) {
+          return; // 已经浏览过
+        }
+
+        if (!client) {
+          // 演示模式：本地计数
+          const viewCountsData = window.viewCountsData || {};
+          viewCountsData[imageId] = (viewCountsData[imageId] || 0) + 1;
+          window.viewCountsData = viewCountsData;
+          updateViewCountBadge(imageId, viewCountsData[imageId]);
+          localStorage.setItem(viewedKey, '1');
+          return;
+        }
+
+        try {
+          // 查询是否存在记录
+          const { data: existing, error: queryError } = await client
+            .from('image_views')
+            .select('id, count')
+            .eq('image_id', imageId)
+            .single();
+
+          if (queryError && queryError.code !== 'PGRST116') {
+            throw queryError;
+          }
+
+          let newCount;
+          if (existing) {
+            // 已有记录，增加计数
+            newCount = existing.count + 1;
+            const { error: updateError } = await client
+              .from('image_views')
+              .update({ count: newCount, updated_at: new Date().toISOString() })
+              .eq('id', existing.id);
+            if (updateError) throw updateError;
+          } else {
+            // 无记录，创建新记录
+            newCount = 1;
+            const { error: insertError } = await client
+              .from('image_views')
+              .insert({ image_id: imageId, count: 1 });
+            if (insertError) throw insertError;
+          }
+
+          // 更新本地数据
+          viewCountsData[imageId] = newCount;
+          updateViewCountBadge(imageId, newCount);
+          localStorage.setItem(viewedKey, '1');
+        } catch (e) {
+          console.warn('浏览量增加失败:', e.message);
+        }
+      }
+
+      // === 更新浏览量徽章 ===
+      function updateViewCountBadge(imageId, count) {
+        const card = document.querySelector('.image-card[data-id="' + imageId + '"]');
+        if (!card) return;
+
+        let badge = card.querySelector('.view-count-badge');
+        if (count > 0) {
+          if (!badge) {
+            badge = document.createElement('div');
+            badge.className = 'view-count-badge';
+            badge.innerHTML = `
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+              <span class="view-count-number">${count}</span>
+            `;
+            const img = card.querySelector('.image-card-img');
+            if (img) card.insertBefore(badge, img.nextSibling);
+          } else {
+            const numSpan = badge.querySelector('.view-count-number');
+            if (numSpan) numSpan.textContent = count;
+          }
+        }
+      }
+
+      // === 初始化浏览量 UI ===
+      async function initViewsUI() {
+        const counts = await loadAllViewCounts();
+        viewCountsData = { ...counts };
+
+        // 更新所有浏览量徽章
+        Object.entries(counts).forEach(([imageId, count]) => {
+          if (count > 0) {
+            updateViewCountBadge(parseInt(imageId), count);
+          }
+        });
+
+        // 暴露到全局
+        window.viewCountsData = viewCountsData;
+      }
+
+      // 首次加载初始化
+      setTimeout(initViewsUI, 800);
+
+      // 暴露全局方法
+      window.incrementViewCount = incrementViewCount;
+      window.loadAllViewCounts = loadAllViewCounts;
+      window.initViewsUI = initViewsUI;
     })();
   </script>
 </body>
