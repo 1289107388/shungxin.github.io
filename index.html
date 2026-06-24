@@ -16,9 +16,6 @@
   <meta name="twitter:title" content="双薪写真画廊">
   <meta name="twitter:description" content="记录美好瞬间，定格珍贵回忆">
   <meta name="twitter:image" content="https://shungxin.github.io/images/1782210152459.png">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <style>
     /* ============================
        CSS Variables — 双薪写真画廊 Design System
@@ -2305,12 +2302,20 @@
 
         let html = '<div class="comments-list">';
         comments.forEach(c => {
-          const avatar = c.github_avatar || 'https://api.dicebear.com/7.x/identicon/svg?seed=' + (c.github_username || 'anon');
+          const username = c.github_username || '匿名用户';
+          const seed = username.replace(/[^a-zA-Z0-9]/g, '') || 'anon';
+          // 本地生成的 SVG 头像（不依赖任何外部服务）
+          const colors = ['#d4a853', '#5b8cba', '#9b6bb5', '#5cb88a', '#c75c5c', '#d4884d', '#6c8eb8', '#a05c9b'];
+          const colorIdx = seed.charCodeAt(0) % colors.length;
+          const avatarColor = colors[colorIdx];
+          const initial = username.charAt(0).toUpperCase();
+          const avatar = c.github_avatar || ('data:image/svg+xml;utf8,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" viewBox="0 0 36 36"><rect width="36" height="36" rx="18" fill="' + avatarColor + '"/><text x="18" y="23" text-anchor="middle" font-family="Arial,sans-serif" font-size="16" font-weight="bold" fill="#fff">' + initial + '</text></svg>'));
           const time = new Date(c.created_at).toLocaleString('zh-CN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
-          html += 
+          html +=
             '<div class="comment-item" style="padding:16px 0;border-bottom:1px solid var(--color-border-default);">' +
               '<div style="display:flex;gap:12px;align-items:flex-start;">' +
-                '<img src="' + avatar + '" style="width:36px;height:36px;border-radius:50%;object-fit:cover;flex-shrink:0;" onerror="this.src=\'https://api.dicebear.com/7.x/identicon/svg?seed=anon\'">' +
+                '<img src="' + avatar + '" style="width:36px;height:36px;border-radius:50%;object-fit:cover;flex-shrink:0;" onerror="this.style.background=\'' + avatarColor + '\';this.style.color=\'#fff\';this.style.display=\'flex\';this.style.alignItems=\'center\';this.style.justifyContent=\'center\';this.style.fontWeight=\'bold\';this.alt=\'' + initial + '\';">'
+                +
                 '<div style="flex:1;min-width:0;">' +
                   '<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">' +
                     '<span style="font-weight:600;font-size:14px;color:var(--color-gray-100);">' + (c.github_username || '匿名用户') + '</span>' +
