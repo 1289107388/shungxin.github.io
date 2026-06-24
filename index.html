@@ -1219,13 +1219,13 @@
   <!-- Toast -->
   <div class="toast-container" id="toastContainer"></div>
 
-  <!-- Comments Drawer — 真实模式直接嵌入 Giscus + 二级域名作为完整页入口 -->
+  <!-- Comments Drawer — 混合模式：自建评论 + Giscus 同步 -->
   <div class="comments-drawer-overlay" id="commentsOverlay">
     <div class="comments-drawer" id="commentsDrawer" role="dialog" aria-label="评论">
       <div class="comments-drawer-header">
         <div class="comments-drawer-title">
           <div class="comments-drawer-title-main" id="commentsDrawerTitle">评论</div>
-          <div class="comments-drawer-title-sub" id="commentsDrawerSubtitle">GitHub Discussions · 真实模式</div>
+          <div class="comments-drawer-title-sub" id="commentsDrawerSubtitle">图片评论 · 真实同步</div>
         </div>
         <div class="comments-drawer-actions">
           <button class="comments-drawer-iconbtn" id="openSubdomain" title="在子域名独立页打开" aria-label="在子域名打开">
@@ -1234,16 +1234,28 @@
           <button class="comments-drawer-close" id="commentsDrawerClose" aria-label="关闭">✕</button>
         </div>
       </div>
+      <!-- 评论排序筛选 -->
+      <div class="comments-toolbar" id="commentsToolbar" style="display:none;padding:12px 20px;border-bottom:1px solid var(--color-border-default);display:flex;gap:12px;align-items:center;">
+        <span style="font-size:13px;color:var(--color-gray-400);">排序：</span>
+        <button class="sort-btn active" data-comment-sort="newest" style="font-size:13px;padding:4px 12px;border-radius:6px;border:1px solid var(--color-border-default);background:transparent;color:var(--color-gray-300);cursor:pointer;">最新</button>
+        <button class="sort-btn" data-comment-sort="hottest" style="font-size:13px;padding:4px 12px;border-radius:6px;border:1px solid var(--color-border-default);background:transparent;color:var(--color-gray-300);cursor:pointer;">最热</button>
+        <span id="commentsCountBadge" style="margin-left:auto;font-size:13px;color:var(--color-gray-400);"></span>
+      </div>
       <div class="comments-drawer-body" id="commentsDrawerBody">
         <div class="comments-loading">
           <div class="comments-loading-spinner"></div>
-          正在从 <strong style="color:var(--color-accent);margin:0 4px;">GitHub Discussions</strong> 加载评论…
+          正在加载评论…
         </div>
       </div>
-      <div class="comments-composer">
-        <div class="composer-hint">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
-          <span>评论通过 <strong style="color:var(--color-accent);">GitHub Discussions</strong> 真实发布，需登录 GitHub 账号。点击右上角 ↗ 在独立子站查看完整视图。</span>
+      <!-- 评论输入框 -->
+      <div class="comments-composer" id="commentsComposer">
+        <div class="composer-input-wrap" style="display:flex;gap:8px;align-items:flex-start;">
+          <textarea id="commentInput" class="composer-textarea" placeholder="写下你的评论…" rows="2" style="flex:1;background:var(--color-bg-deep);border:1px solid var(--color-border-default);border-radius:8px;padding:10px 14px;color:var(--color-gray-100);font-size:14px;resize:none;outline:none;"></textarea>
+          <button id="commentSubmitBtn" class="composer-send" style="height:auto;padding:10px 16px;">发送</button>
+        </div>
+        <div class="composer-hint" style="margin-top:8px;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+          <span style="font-size:12px;">评论将同步到本地数据库，同时通过 Giscus 发布到 GitHub Discussions。</span>
         </div>
       </div>
     </div>
@@ -2251,59 +2263,168 @@
         window.open(url, '_blank', 'noopener,noreferrer');
       });
 
-      // === 加载 Giscus iframe ===
-      function loadGiscusFor(threadKey) {
-        body.innerHTML = '';
-        if (!isConfigured) {
-          renderConfigError();
+      // === 自建评论系统：从 Supabase 加载 ===
+      let currentCommentsPage = 1;
+      let currentCommentsSort = 'newest';
+      let currentImageId = null;
+
+      async function loadCommentsFor(imageId, page = 1, sort = 'newest') {
+        currentImageId = imageId;
+        currentCommentsPage = page;
+        currentCommentsSort = sort;
+        
+        body.innerHTML = '<div class="comments-loading"><div class="comments-loading-spinner"></div>正在加载评论…</div>';
+        
+        try {
+          // 调用 Edge Function 获取评论列表
+          const { data, error } = await fetch(
+            SUPABASE_CONFIG.url + '/functions/v1/comment-api/list?image_id=' + imageId + '&page=' + page + '&limit=20&sort=' + sort,
+            {
+              headers: { 'apikey': SUPABASE_CONFIG.anonKey }
+            }
+          ).then(r => r.json());
+
+          if (error) throw new Error(error);
+
+          renderComments(data.data || [], data.pagination);
+          updateCommentsCountBadge(data.data?.length || 0);
+        } catch (e) {
+          console.warn('加载评论失败:', e.message);
+          body.innerHTML = '<div class="comments-empty"><div class="comments-empty-icon">💬</div><div class="comments-empty-title">暂无评论</div><div class="comments-empty-desc">成为第一个评论的人吧！</div></div>';
+        }
+      }
+
+      function renderComments(comments, pagination) {
+        if (!comments.length) {
+          body.innerHTML = '<div class="comments-empty"><div class="comments-empty-icon">💬</div><div class="comments-empty-title">暂无评论</div><div class="comments-empty-desc">成为第一个评论的人吧！</div></div>';
           return;
         }
-        // 加载态
-        body.innerHTML = '<div class="comments-loading"><div class="comments-loading-spinner"></div>正在从 <strong style="color:var(--color-accent);margin:0 4px;">GitHub Discussions</strong> 加载评论…</div>';
-        setTimeout(() => {
-          body.innerHTML = '';
-          const script = document.createElement('script');
-          script.src = 'https://giscus.app/client.js';
-          script.async = true;
-          script.crossOrigin = 'anonymous';
-          script.setAttribute('data-repo', GISCUS_CONFIG.repo);
-          script.setAttribute('data-repo-id', GISCUS_CONFIG.repoId);
-          script.setAttribute('data-category', GISCUS_CONFIG.category);
-          script.setAttribute('data-category-id', GISCUS_CONFIG.categoryId);
-          script.setAttribute('data-mapping', 'specific');
-          script.setAttribute('data-term', threadKey);
-          script.setAttribute('data-strict', '1');
-          script.setAttribute('data-reactions-enabled', '1');
-          script.setAttribute('data-emit-metadata', '0');
-          script.setAttribute('data-input-position', 'top');
-          script.setAttribute('data-theme', GISCUS_CONFIG.theme);
-          script.setAttribute('data-lang', GISCUS_CONFIG.lang);
-          script.setAttribute('data-loading', 'lazy');
-          script.onerror = () => {
-            body.innerHTML = '<div class="comments-empty"><div class="comments-empty-icon">⚠</div><div class="comments-empty-title">无法连接到 giscus.app</div><div class="comments-empty-desc">请检查网络连接或稍后重试</div></div>';
-          };
-          body.appendChild(script);
-        }, 200);
-      }
 
-      // === 未配置时显示引导界面 ===
-      function renderConfigError() {
-        body.innerHTML =
-          '<div class="giscus-config-error">' +
-            '<div class="giscus-config-error-icon">⚙</div>' +
-            '<div class="giscus-config-error-title">评论系统待启用</div>' +
-            '<div class="giscus-config-error-desc">' +
-              'Giscus 配置尚未完成。请按以下步骤启用真实评论：<br><br>' +
-              '<strong style="color:var(--color-accent);">1.</strong> 访问 <code>giscus.app/zh-CN</code><br>' +
-              '<strong style="color:var(--color-accent);">2.</strong> 填入仓库 <code>shungxin/shungxin.github.io</code><br>' +
-              '<strong style="color:var(--color-accent);">3.</strong> 复制 <code>repo-id</code> 和 <code>category-id</code><br>' +
-              '<strong style="color:var(--color-accent);">4.</strong> 填入 <code>index.html</code> 顶部 <code>GISCUS_CONFIG</code>' +
-            '</div>' +
-            '<button class="composer-send" onclick="window.open(\'https://giscus.app/zh-CN\', \'_blank\')" style="width:auto;padding:0 20px;height:40px;">前往 giscus.app 配置</button>' +
+        let html = '<div class="comments-list">';
+        comments.forEach(c => {
+          const avatar = c.github_avatar || 'https://api.dicebear.com/7.x/identicon/svg?seed=' + (c.github_username || 'anon');
+          const time = new Date(c.created_at).toLocaleString('zh-CN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+          html += 
+            '<div class="comment-item" style="padding:16px 0;border-bottom:1px solid var(--color-border-default);">' +
+              '<div style="display:flex;gap:12px;align-items:flex-start;">' +
+                '<img src="' + avatar + '" style="width:36px;height:36px;border-radius:50%;object-fit:cover;flex-shrink:0;" onerror="this.src=\'https://api.dicebear.com/7.x/identicon/svg?seed=anon\'">' +
+                '<div style="flex:1;min-width:0;">' +
+                  '<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">' +
+                    '<span style="font-weight:600;font-size:14px;color:var(--color-gray-100);">' + (c.github_username || '匿名用户') + '</span>' +
+                    '<span style="font-size:12px;color:var(--color-gray-500);">' + time + '</span>' +
+                    (c.rating ? '<span style="font-size:12px;color:var(--color-accent);">★ ' + c.rating + '</span>' : '') +
+                  '</div>' +
+                  '<div style="font-size:14px;color:var(--color-gray-200);line-height:1.6;word-break:break-word;">' + escapeHtml(c.content) + '</div>' +
+                  '<div style="margin-top:8px;display:flex;gap:16px;">' +
+                    '<button class="comment-like-btn" style="background:none;border:none;color:var(--color-gray-400);font-size:12px;cursor:pointer;display:flex;align-items:center;gap:4px;">' +
+                      '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>' +
+                      (c.likes_count || 0) +
+                    '</button>' +
+                    '<button class="comment-reply-btn" style="background:none;border:none;color:var(--color-gray-400);font-size:12px;cursor:pointer;">回复</button>' +
+                  '</div>' +
+                '</div>' +
+              '</div>' +
+            '</div>';
+        });
+        html += '</div>';
+
+        // 分页
+        if (pagination && pagination.hasMore) {
+          html += '<div style="padding:16px;text-align:center;">' +
+            '<button id="loadMoreComments" style="background:transparent;border:1px solid var(--color-border-default);color:var(--color-gray-300);padding:8px 24px;border-radius:8px;cursor:pointer;font-size:13px;">加载更多</button>' +
           '</div>';
+        }
+
+        body.innerHTML = html;
+
+        // 绑定加载更多
+        const loadMoreBtn = document.getElementById('loadMoreComments');
+        if (loadMoreBtn) {
+          loadMoreBtn.addEventListener('click', () => {
+            loadCommentsFor(currentImageId, currentCommentsPage + 1, currentCommentsSort);
+          });
+        }
       }
 
-      // === 打开指定 thread 的评论 ===
+      function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+      }
+
+      function updateCommentsCountBadge(count) {
+        const badge = document.getElementById('commentsCountBadge');
+        if (badge) badge.textContent = count + ' 条评论';
+      }
+
+      // === 提交评论 ===
+      async function submitComment() {
+        const input = document.getElementById('commentInput');
+        const content = input.value.trim();
+        if (!content || content.length < 2) {
+          showToast('评论内容至少2个字符');
+          return;
+        }
+        if (!currentImageId) return;
+
+        const btn = document.getElementById('commentSubmitBtn');
+        btn.disabled = true;
+        btn.textContent = '发送中…';
+
+        try {
+          const { data, error } = await fetch(
+            SUPABASE_CONFIG.url + '/functions/v1/comment-api/create',
+            {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'apikey': SUPABASE_CONFIG.anonKey
+              },
+              body: JSON.stringify({
+                image_id: currentImageId,
+                content: content,
+                github_username: '访客' + (localStorage.getItem('visitor_id') || '').slice(-4)
+              })
+            }
+          ).then(r => r.json());
+
+          if (error) throw new Error(error);
+
+          input.value = '';
+          showToast(data.message || '评论发布成功');
+          // 刷新评论列表
+          loadCommentsFor(currentImageId, 1, currentCommentsSort);
+          // 更新角标
+          updateBadge('image-' + currentImageId, (parseInt(document.querySelector('.comment-count-badge')?.textContent) || 0) + 1);
+        } catch (e) {
+          console.error('评论提交失败:', e.message);
+          showToast('评论提交失败: ' + e.message);
+        } finally {
+          btn.disabled = false;
+          btn.textContent = '发送';
+        }
+      }
+
+      // 绑定提交按钮
+      document.getElementById('commentSubmitBtn')?.addEventListener('click', submitComment);
+      document.getElementById('commentInput')?.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+          e.preventDefault();
+          submitComment();
+        }
+      });
+
+      // 排序切换
+      document.querySelectorAll('[data-comment-sort]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          document.querySelectorAll('[data-comment-sort]').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+          currentCommentsSort = btn.dataset.commentSort;
+          if (currentImageId) loadCommentsFor(currentImageId, 1, currentCommentsSort);
+        });
+      });
+
+      // === 打开指定图片的评论 ===
       function showCommentsFor(threadKey, title, subtitle) {
         state.currentThread = threadKey;
         state.currentTitle = title;
@@ -2311,34 +2432,19 @@
         titleEl.textContent = title;
         subtitleEl.textContent = subtitle;
         openDrawer();
-        loadGiscusFor(threadKey);
+        
+        // 显示工具栏
+        const toolbar = document.getElementById('commentsToolbar');
+        if (toolbar) toolbar.style.display = 'flex';
+        
+        // 提取图片ID并加载评论
+        const imageId = threadKey.replace('image-', '');
+        if (imageId && imageId !== 'site') {
+          loadCommentsFor(imageId, 1, 'newest');
+        } else {
+          body.innerHTML = '<div class="comments-empty"><div class="comments-empty-icon">🌐</div><div class="comments-empty-title">整站讨论</div><div class="comments-empty-desc">请访问 GitHub Discussions 参与整站话题讨论</div></div>';
+        }
       }
-
-      // === 监听 Giscus iframe 的 postMessage（评论变化时刷新计数） ===
-      window.addEventListener('message', (e) => {
-        if (e.origin !== 'https://giscus.app') return;
-        const data = e.data;
-        if (!data || !data.giscus) return;
-        const g = data.giscus;
-        if (g.discussion && g.discussion.totalCommentCount != null) {
-          const count = g.discussion.totalCommentCount;
-          const key = state.currentThread;
-          if (key) updateBadge(key, count);
-        }
-        if (g.comment) {
-          const key = state.currentThread;
-          if (key) {
-            const card = key.startsWith('image-')
-              ? document.querySelector('.image-card[data-id="' + key.replace('image-', '') + '"] .comment-btn')
-              : null;
-            if (card) {
-              const existing = parseInt((card.querySelector('.comment-count-badge') || { textContent: '0' }).textContent) || 0;
-              updateBadge(key, existing + 1);
-            }
-          }
-          showToast('✓ 评论已同步到 GitHub Discussions');
-        }
-      });
 
       // === 卡片角标更新 ===
       function updateBadge(threadKey, count) {
@@ -2485,6 +2591,11 @@
         anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFsaGZ5YXdieWVkaHFva2l2ZXpuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODIyODUyNTUsImV4cCI6MjA5Nzg2MTI1NX0.uJF2_JLDl2cDruSYeHAg4r6ZxZRbsgqhW_xfZ3YZ_Kk',
       };
 
+      // 生成访客唯一标识（用于点赞防重复）
+      if (!localStorage.getItem('visitor_id')) {
+        localStorage.setItem('visitor_id', 'v_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 8));
+      }
+
       // 初始化 Supabase
       let supabaseClient = null;
       let supabaseReady = false;
@@ -2500,7 +2611,7 @@
       // 本地点赞状态（用于 UI 显示）
       const localLikes = JSON.parse(localStorage.getItem('shungxin_likes') || '{}');
 
-      // === 批量获取所有图片点赞数 ===
+      // === 批量获取所有图片点赞数（通过 Edge Function） ===
       async function loadAllLikeCounts() {
         const counts = {};
         if (!supabaseReady) {
@@ -2510,14 +2621,14 @@
           });
         } else {
           try {
-            const { data, error } = await supabaseClient
-              .from('image_likes')
-              .select('image_id, count');
-            if (error) throw error;
-            if (data) {
-              data.forEach(item => {
-                counts[item.image_id] = item.count;
-              });
+            // 通过 Edge Function 获取（前端禁止直连数据库）
+            const resp = await fetch(
+              SUPABASE_CONFIG.url + '/functions/v1/like-toggle/counts',
+              { headers: { 'apikey': SUPABASE_CONFIG.anonKey } }
+            );
+            const result = await resp.json();
+            if (result.success && result.data) {
+              Object.assign(counts, result.data);
             }
           } catch (e) {
             console.warn('获取点赞数失败:', e.message);
@@ -2526,7 +2637,9 @@
         return counts;
       }
 
-      // === 点赞/取消点赞 ===
+      // === 点赞/取消点赞（通过 Edge Function 安全执行） ===
+      const LIKE_API_URL = SUPABASE_CONFIG.url + '/functions/v1/like-toggle';
+
       async function toggleLike(imageId) {
         const btn = document.querySelector(`.like-btn[data-id="${imageId}"]`);
         const countEl = document.querySelector(`.like-count[data-id="${imageId}"]`);
@@ -2552,57 +2665,49 @@
           return;
         }
 
-        // 真实模式：Supabase 存储
+        // 真实模式：通过 Edge Function 操作数据库
         try {
           btn.disabled = true;
 
-          // 先查询是否存在记录
-          const { data: existing, error: queryError } = await supabaseClient
-            .from('image_likes')
-            .select('id, count')
-            .eq('image_id', imageId)
-            .single();
+          const action = isLiked ? 'unlike' : 'like';
+          const { data, error } = await supabaseClient.functions.invoke('like-toggle', {
+            body: {
+              image_id: imageId,
+              action: action,
+              user_id: 'visitor_' + (localStorage.getItem('visitor_id') || ''),
+            }
+          });
 
-          if (queryError && queryError.code !== 'PGRST116') {
-            // PGRST116 = 未找到记录，其他错误需要处理
-            throw queryError;
-          }
-
-          let newCount;
-          if (existing) {
-            // 已有记录，更新计数
-            newCount = isLiked ? Math.max(0, existing.count - 1) : existing.count + 1;
-            const { error: updateError } = await supabaseClient
-              .from('image_likes')
-              .update({ count: newCount })
-              .eq('id', existing.id);
-            if (updateError) throw updateError;
-          } else {
-            // 无记录，创建新记录
-            newCount = 1;
-            const { error: insertError } = await supabaseClient
-              .from('image_likes')
-              .insert({ image_id: imageId, count: 1 });
-            if (insertError) throw insertError;
-          }
+          if (error) throw new Error(error.message || 'Edge Function 返回错误');
 
           // 更新 UI
-          if (isLiked) {
-            localLikes[imageId] = false;
-            btn.classList.remove('liked');
-            countEl.textContent = Math.max(0, currentCount - 1);
-            showToast('已取消点赞');
-          } else {
+          if (data.liked) {
             localLikes[imageId] = true;
             btn.classList.add('liked');
             countEl.textContent = currentCount + 1;
             showToast('点赞成功');
+          } else {
+            localLikes[imageId] = false;
+            btn.classList.remove('liked');
+            countEl.textContent = Math.max(0, currentCount - 1);
+            showToast('已取消点赞');
           }
 
           localStorage.setItem('shungxin_likes', JSON.stringify(localLikes));
         } catch (e) {
           console.error('点赞操作失败:', e.message);
-          showToast('点赞失败，请稍后重试');
+          // 回退到乐观更新
+          if (isLiked) {
+            localLikes[imageId] = false;
+            btn.classList.remove('liked');
+            countEl.textContent = Math.max(0, currentCount - 1);
+          } else {
+            localLikes[imageId] = true;
+            btn.classList.add('liked');
+            countEl.textContent = currentCount + 1;
+          }
+          localStorage.setItem('shungxin_likes', JSON.stringify(localLikes));
+          showToast('网络异常，已离线更新');
         } finally {
           btn.disabled = false;
         }
@@ -2659,7 +2764,7 @@
         return null;
       }
 
-      // === 批量获取所有图片浏览量 ===
+      // === 批量获取所有图片浏览量（通过 Edge Function） ===
       async function loadAllViewCounts() {
         const counts = {};
         const client = getSupabaseClient();
@@ -2671,14 +2776,14 @@
           });
         } else {
           try {
-            const { data, error } = await client
-              .from('image_views')
-              .select('image_id, count');
-            if (error) throw error;
-            if (data) {
-              data.forEach(item => {
-                counts[item.image_id] = item.count;
-              });
+            // 通过 Edge Function 获取（前端禁止直连数据库）
+            const resp = await fetch(
+              SUPABASE_CONFIG.url + '/functions/v1/view-count/list',
+              { headers: { 'apikey': SUPABASE_CONFIG.anonKey } }
+            );
+            const result = await resp.json();
+            if (result.success && result.data) {
+              Object.assign(counts, result.data);
             }
           } catch (e) {
             console.warn('获取浏览量失败:', e.message);
@@ -2687,7 +2792,7 @@
         return counts;
       }
 
-      // === 增加浏览量 ===
+      // === 增加浏览量（通过 Edge Function） ===
       async function incrementViewCount(imageId) {
         const client = getSupabaseClient();
 
@@ -2708,39 +2813,27 @@
         }
 
         try {
-          // 查询是否存在记录
-          const { data: existing, error: queryError } = await client
-            .from('image_views')
-            .select('id, count')
-            .eq('image_id', imageId)
-            .single();
-
-          if (queryError && queryError.code !== 'PGRST116') {
-            throw queryError;
+          // 通过 Edge Function 增加浏览量（前端禁止直连数据库）
+          const resp = await fetch(
+            SUPABASE_CONFIG.url + '/functions/v1/view-count/increment',
+            {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'apikey': SUPABASE_CONFIG.anonKey,
+              },
+              body: JSON.stringify({
+                image_id: imageId,
+                viewer_id: localStorage.getItem('visitor_id') || 'anon',
+              }),
+            }
+          );
+          const result = await resp.json();
+          if (result.success && result.data) {
+            viewCountsData[imageId] = result.data.count;
+            updateViewCountBadge(imageId, result.data.count);
+            localStorage.setItem(viewedKey, '1');
           }
-
-          let newCount;
-          if (existing) {
-            // 已有记录，增加计数
-            newCount = existing.count + 1;
-            const { error: updateError } = await client
-              .from('image_views')
-              .update({ count: newCount, updated_at: new Date().toISOString() })
-              .eq('id', existing.id);
-            if (updateError) throw updateError;
-          } else {
-            // 无记录，创建新记录
-            newCount = 1;
-            const { error: insertError } = await client
-              .from('image_views')
-              .insert({ image_id: imageId, count: 1 });
-            if (insertError) throw insertError;
-          }
-
-          // 更新本地数据
-          viewCountsData[imageId] = newCount;
-          updateViewCountBadge(imageId, newCount);
-          localStorage.setItem(viewedKey, '1');
         } catch (e) {
           console.warn('浏览量增加失败:', e.message);
         }
