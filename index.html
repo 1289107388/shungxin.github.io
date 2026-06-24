@@ -3,13 +3,13 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Stellar — 星辰画廊</title>
+  <title>双薪写真画廊</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <style>
     /* ============================
-       CSS Variables — Stellar Design System
+       CSS Variables — 双薪写真画廊 Design System
        ============================ */
     :root {
       --color-accent: #D4A853;
@@ -210,6 +210,13 @@
       min-width: 44px; min-height: 44px;
     }
     .card-action-btn:hover { color: var(--color-accent); background: rgba(24, 24, 32, 0.95); }
+    .card-action-btn.liked { color: #EF4444; }
+    .card-action-btn.liked svg { fill: #EF4444; stroke: #EF4444; }
+    .like-count {
+      font-size: 11px; font-weight: 600; color: var(--color-gray-300);
+      margin-left: 2px; min-width: 18px; text-align: center;
+    }
+    .card-action-btn.liked .like-count { color: #EF4444; }
 
     /* ============================
        Long Press Context Menu (Mobile)
@@ -767,7 +774,7 @@
 
   <!-- Navigation -->
   <nav class="top-nav" id="topNav">
-    <div class="nav-logo">Stellar<span style="color:var(--color-accent);">.</span></div>
+    <div class="nav-logo">双薪写真<span style="color:var(--color-accent);">.</span></div>
     <ul class="nav-links">
       <li><a class="active" data-section="gallery">Gallery</a></li>
       <li><a data-section="footer">About</a></li>
@@ -791,8 +798,8 @@
   <!-- Gallery -->
   <section class="gallery-section" id="gallery">
     <div class="gallery-header">
-      <h2 class="gallery-title">探索星辰</h2>
-      <p class="gallery-subtitle">每张图片都是一颗等待唤醒的星辰 — 悬停感受光晕与视差</p>
+      <h2 class="gallery-title">双薪写真画廊</h2>
+      <p class="gallery-subtitle">记录美好瞬间，定格珍贵回忆 — 悬停感受光晕与视差</p>
       <div class="gallery-filters">
         <button class="filter-btn active" data-filter="all">全部</button>
         <button class="filter-btn" data-filter="landscape">风景</button>
@@ -913,7 +920,7 @@
 
   <!-- Footer -->
   <footer class="site-footer" id="footer">
-    <div class="footer-logo">Stellar<span style="color:var(--color-accent);">.</span></div>
+    <div class="footer-logo">双薪写真<span style="color:var(--color-accent);">.</span></div>
     <p class="footer-text">Crafted with light and silence — a gallery among the stars</p>
     <div class="footer-links">
       <a href="#">Privacy</a><a href="#">Terms</a><a href="#">Contact</a>
@@ -970,6 +977,10 @@
           <div class="glow-border"></div>
           <div class="image-card-inner">
             <div class="image-card-actions">
+              <button class="card-action-btn like-btn" title="点赞" aria-label="Like image" data-id="${img.id}">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+                <span class="like-count" data-id="${img.id}">0</span>
+              </button>
               <button class="card-action-btn save-btn" title="保存" aria-label="Save image">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
               </button>
@@ -1022,6 +1033,7 @@
           openLightbox(index);
         });
 
+        card.querySelector('.like-btn').addEventListener('click', (e) => { e.stopPropagation(); toggleLike(img.id); });
         card.querySelector('.save-btn').addEventListener('click', (e) => { e.stopPropagation(); saveImage(img); });
         card.querySelector('.share-btn').addEventListener('click', (e) => { e.stopPropagation(); shareImage(img); });
 
@@ -1514,7 +1526,7 @@
 
     function shareImage(img) {
       if (navigator.share) {
-        navigator.share({ title: img.title, text: `${img.title} — Stellar Gallery`, url: img.src })
+        navigator.share({ title: img.title, text: `${img.title} — 双薪写真画廊`, url: img.src })
           .catch(() => { fallbackCopy(img.src); });
       } else { fallbackCopy(img.src); }
     }
@@ -1973,6 +1985,180 @@
       }
 
       window.StellarComments = { state, showCommentsFor, isConfigured };
+    })();
+  </script>
+
+  <!-- ============================
+       Supabase 点赞系统
+       ============================ -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script>
+    (function() {
+      'use strict';
+
+      // === Supabase 配置 ===
+      const SUPABASE_CONFIG = {
+        url: 'https://qlhfyawbyedhqokivezn.supabase.co',
+        anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFsaGZ5YXdieWVkaHFva2l2ZXpuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODIyODUyNTUsImV4cCI6MjA5Nzg2MTI1NX0.uJF2_JLDl2cDruSYeHAg4r6ZxZRbsgqhW_xfZ3YZ_Kk',
+      };
+
+      // 初始化 Supabase
+      let supabaseClient = null;
+      let supabaseReady = false;
+      try {
+        if (SUPABASE_CONFIG.url !== 'YOUR_SUPABASE_URL' && SUPABASE_CONFIG.anonKey !== 'YOUR_SUPABASE_ANON_KEY') {
+          supabaseClient = window.supabase.createClient(SUPABASE_CONFIG.url, SUPABASE_CONFIG.anonKey);
+          supabaseReady = true;
+        }
+      } catch (e) {
+        console.warn('Supabase 初始化失败:', e.message);
+      }
+
+      // 本地点赞状态（用于 UI 显示）
+      const localLikes = JSON.parse(localStorage.getItem('shungxin_likes') || '{}');
+
+      // === 批量获取所有图片点赞数 ===
+      async function loadAllLikeCounts() {
+        const counts = {};
+        if (!supabaseReady) {
+          // 演示模式：随机生成点赞数
+          imageData.forEach(img => {
+            counts[img.id] = Math.floor(Math.random() * 50) + 1;
+          });
+        } else {
+          try {
+            const { data, error } = await supabaseClient
+              .from('image_likes')
+              .select('image_id, count');
+            if (error) throw error;
+            if (data) {
+              data.forEach(item => {
+                counts[item.image_id] = item.count;
+              });
+            }
+          } catch (e) {
+            console.warn('获取点赞数失败:', e.message);
+          }
+        }
+        return counts;
+      }
+
+      // === 点赞/取消点赞 ===
+      async function toggleLike(imageId) {
+        const btn = document.querySelector(`.like-btn[data-id="${imageId}"]`);
+        const countEl = document.querySelector(`.like-count[data-id="${imageId}"]`);
+        if (!btn || !countEl) return;
+
+        const isLiked = localLikes[imageId];
+        let currentCount = parseInt(countEl.textContent) || 0;
+
+        if (!supabaseReady) {
+          // 演示模式：仅本地存储
+          if (isLiked) {
+            localLikes[imageId] = false;
+            currentCount = Math.max(0, currentCount - 1);
+            btn.classList.remove('liked');
+          } else {
+            localLikes[imageId] = true;
+            currentCount += 1;
+            btn.classList.add('liked');
+          }
+          countEl.textContent = currentCount;
+          localStorage.setItem('shungxin_likes', JSON.stringify(localLikes));
+          showToast(isLiked ? '已取消点赞' : '点赞成功（演示模式）');
+          return;
+        }
+
+        // 真实模式：Supabase 存储
+        try {
+          btn.disabled = true;
+
+          // 先查询是否存在记录
+          const { data: existing, error: queryError } = await supabaseClient
+            .from('image_likes')
+            .select('id, count')
+            .eq('image_id', imageId)
+            .single();
+
+          if (queryError && queryError.code !== 'PGRST116') {
+            // PGRST116 = 未找到记录，其他错误需要处理
+            throw queryError;
+          }
+
+          let newCount;
+          if (existing) {
+            // 已有记录，更新计数
+            newCount = isLiked ? Math.max(0, existing.count - 1) : existing.count + 1;
+            const { error: updateError } = await supabaseClient
+              .from('image_likes')
+              .update({ count: newCount })
+              .eq('id', existing.id);
+            if (updateError) throw updateError;
+          } else {
+            // 无记录，创建新记录
+            newCount = 1;
+            const { error: insertError } = await supabaseClient
+              .from('image_likes')
+              .insert({ image_id: imageId, count: 1 });
+            if (insertError) throw insertError;
+          }
+
+          // 更新 UI
+          if (isLiked) {
+            localLikes[imageId] = false;
+            btn.classList.remove('liked');
+            countEl.textContent = Math.max(0, currentCount - 1);
+            showToast('已取消点赞');
+          } else {
+            localLikes[imageId] = true;
+            btn.classList.add('liked');
+            countEl.textContent = currentCount + 1;
+            showToast('点赞成功');
+          }
+
+          localStorage.setItem('shungxin_likes', JSON.stringify(localLikes));
+        } catch (e) {
+          console.error('点赞操作失败:', e.message);
+          showToast('点赞失败，请稍后重试');
+        } finally {
+          btn.disabled = false;
+        }
+      }
+
+      // === 初始化点赞 UI ===
+      async function initLikesUI() {
+        const counts = await loadAllLikeCounts();
+
+        // 更新所有点赞按钮状态和计数
+        document.querySelectorAll('.like-btn').forEach(btn => {
+          const imageId = btn.dataset.id;
+          const countEl = btn.querySelector('.like-count');
+          if (countEl) {
+            countEl.textContent = counts[imageId] || 0;
+          }
+          if (localLikes[imageId]) {
+            btn.classList.add('liked');
+          }
+        });
+      }
+
+      // === 监听 renderGallery 完成后初始化点赞 ===
+      const originalRenderGallery = window.renderGallery;
+      if (originalRenderGallery) {
+        window.renderGallery = function(filter) {
+          originalRenderGallery(filter);
+          setTimeout(initLikesUI, 100);
+        };
+      }
+
+      // 首次加载初始化
+      setTimeout(initLikesUI, 500);
+
+      // 暴露全局方法
+      window.toggleLike = toggleLike;
+      window.loadAllLikeCounts = loadAllLikeCounts;
+      window.initLikesUI = initLikesUI;
+      window.supabaseReady = supabaseReady;
     })();
   </script>
 </body>
