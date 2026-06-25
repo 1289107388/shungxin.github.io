@@ -1059,6 +1059,145 @@
       25% { transform: translateX(-8px); }
       75% { transform: translateX(8px); }
     }
+
+    /* ============================
+       用户认证 UI
+       ============================ */
+    .auth-area { display: flex; align-items: center; gap: 6px; }
+    .auth-btn {
+      padding: 7px 14px; border-radius: 6px; cursor: pointer; font-size: 13px;
+      font-family: inherit; transition: all .18s ease; white-space: nowrap;
+      background: transparent; color: var(--color-gray-200);
+      border: 1px solid var(--color-gray-700, rgba(255,255,255,.15));
+    }
+    .auth-btn:hover { color: var(--color-accent); border-color: var(--color-accent); }
+    .auth-btn-primary { background: var(--color-accent); color: #fff; border-color: var(--color-accent); }
+    .auth-btn-primary:hover { background: var(--color-accent-hover, #c8954a); color: #fff; }
+
+    .user-menu { position: relative; }
+    .user-menu-trigger {
+      display: flex; align-items: center; gap: 8px; padding: 4px 10px 4px 4px;
+      background: transparent; border: 1px solid rgba(255,255,255,.1); border-radius: 999px;
+      cursor: pointer; color: var(--color-gray-200); font-family: inherit; font-size: 13px;
+      transition: all .18s ease;
+    }
+    .user-menu-trigger:hover { border-color: var(--color-accent); }
+    .user-avatar {
+      width: 30px; height: 30px; border-radius: 50%;
+      background: linear-gradient(135deg, var(--color-accent), #c8954a);
+      color: #fff; display: flex; align-items: center; justify-content: center;
+      font-weight: 600; font-size: 13px;
+    }
+    .user-name { font-weight: 500; }
+    .user-caret { font-size: 10px; opacity: .7; }
+
+    .user-menu-dropdown {
+      position: absolute; top: calc(100% + 8px); right: 0; min-width: 220px;
+      background: var(--color-gray-900, #1a1a1a); border: 1px solid rgba(255,255,255,.1);
+      border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,.4);
+      padding: 6px 0; z-index: 1000; overflow: hidden;
+    }
+    .user-menu-header {
+      padding: 10px 14px; border-bottom: 1px solid rgba(255,255,255,.08);
+      display: flex; align-items: center; gap: 8px;
+    }
+    .user-menu-header .user-name { font-weight: 600; }
+    .user-role {
+      font-size: 11px; padding: 2px 8px; border-radius: 999px;
+      background: rgba(212,168,83,.15); color: var(--color-accent);
+      margin-left: auto;
+    }
+    .user-menu-item {
+      display: block; width: 100%; padding: 9px 14px; text-align: left;
+      background: transparent; border: none; color: var(--color-gray-200);
+      font-family: inherit; font-size: 13px; cursor: pointer; transition: background .15s;
+    }
+    .user-menu-item:hover { background: rgba(255,255,255,.06); }
+    .user-menu-item-danger { color: #ff6b6b; }
+    .user-menu-item-danger:hover { background: rgba(255,107,107,.12); }
+
+    /* 模态框 */
+    .modal-overlay {
+      position: fixed; inset: 0; background: rgba(0,0,0,.6);
+      display: flex; align-items: center; justify-content: center;
+      z-index: 2000; padding: 20px; animation: modalIn .2s ease;
+    }
+    .modal-overlay.hidden { display: none; }
+    .modal-card {
+      background: var(--color-bg, #1a1a1a); border-radius: 12px;
+      width: 100%; max-width: 420px; max-height: 90vh; overflow-y: auto;
+      box-shadow: 0 20px 60px rgba(0,0,0,.5); position: relative;
+      padding: 28px 28px 24px;
+    }
+    .modal-close {
+      position: absolute; top: 12px; right: 12px; background: transparent;
+      border: none; color: var(--color-gray-200); font-size: 18px;
+      cursor: pointer; width: 32px; height: 32px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .modal-close:hover { background: rgba(255,255,255,.1); }
+    @keyframes modalIn { from { opacity: 0; transform: scale(.96); } to { opacity: 1; transform: scale(1); } }
+
+    .auth-tabs { display: flex; gap: 4px; margin-bottom: 18px; border-bottom: 1px solid rgba(255,255,255,.08); }
+    .auth-tab {
+      flex: 1; padding: 10px; background: transparent; border: none;
+      color: var(--color-gray-200); cursor: pointer; font-family: inherit;
+      font-size: 14px; opacity: .6; border-bottom: 2px solid transparent;
+      margin-bottom: -1px; transition: all .15s;
+    }
+    .auth-tab:hover { opacity: .9; }
+    .auth-tab.active { opacity: 1; color: var(--color-accent); border-bottom-color: var(--color-accent); }
+
+    .auth-form { display: flex; flex-direction: column; gap: 14px; }
+    .auth-form.hidden { display: none; }
+    .auth-title { margin: 0 0 4px; font-size: 18px; color: var(--color-gray-200); }
+    .auth-field { display: flex; flex-direction: column; gap: 6px; }
+    .auth-field > span { font-size: 12px; color: var(--color-gray-200); opacity: .8; display: flex; align-items: center; gap: 6px; }
+    .field-hint { font-style: normal; opacity: .55; font-size: 11px; }
+    .auth-field input {
+      padding: 10px 12px; border-radius: 6px; border: 1px solid rgba(255,255,255,.15);
+      background: rgba(255,255,255,.04); color: var(--color-gray-200);
+      font-size: 14px; font-family: inherit; transition: border-color .15s;
+    }
+    .auth-field input:focus { outline: none; border-color: var(--color-accent); background: rgba(255,255,255,.06); }
+    .field-status { font-size: 11px; padding: 2px 0 0; min-height: 14px; }
+    .field-status.ok { color: #4ade80; }
+    .field-status.err { color: #ff6b6b; }
+
+    .auth-error {
+      padding: 9px 12px; border-radius: 6px; font-size: 13px;
+      background: rgba(255,107,107,.12); color: #ff8585; border-left: 3px solid #ff6b6b;
+    }
+    .auth-submit {
+      padding: 11px; border: none; border-radius: 6px; cursor: pointer;
+      background: var(--color-accent); color: #fff; font-family: inherit;
+      font-size: 14px; font-weight: 500; transition: all .15s; margin-top: 4px;
+    }
+    .auth-submit:hover { background: var(--color-accent-hover, #c8954a); }
+    .auth-submit:disabled { opacity: .5; cursor: not-allowed; }
+    .auth-hint { font-size: 12px; opacity: .7; text-align: center; }
+    .auth-hint a { color: var(--color-accent); text-decoration: none; }
+    .auth-hint a:hover { text-decoration: underline; }
+
+    @media (max-width: 480px) {
+      .auth-btn { padding: 6px 10px; font-size: 12px; }
+      .user-name { display: none; }
+      .user-caret { display: none; }
+    }
+
+    .composer-auth-hint {
+      display: flex; align-items: center; gap: 8px; padding: 8px 12px;
+      background: rgba(212,168,83,.08); border: 1px dashed rgba(212,168,83,.3);
+      border-radius: 6px; font-size: 12px; margin-bottom: 8px; color: var(--color-gray-200);
+    }
+    .composer-auth-hint[hidden] { display: none; }
+    .composer-auth-hint > span { flex: 1; }
+    .composer-login-btn {
+      padding: 4px 12px; border: 1px solid var(--color-accent);
+      background: var(--color-accent); color: #fff; border-radius: 4px;
+      cursor: pointer; font-size: 12px; font-family: inherit; transition: all .15s;
+    }
+    .composer-login-btn:hover { background: var(--color-accent-hover, #c8954a); }
   </style>
 
   <script>
@@ -1126,6 +1265,28 @@
       </li>
     </ul>
     <div style="display:flex;align-items:center;gap:8px;">
+      <!-- 用户认证 -->
+      <div id="authArea" class="auth-area" data-state="logged-out">
+        <button class="auth-btn" id="authLoginBtn" type="button">登录</button>
+        <button class="auth-btn auth-btn-primary" id="authRegisterBtn" type="button">注册</button>
+      </div>
+      <div id="userMenu" class="user-menu" hidden>
+        <button class="user-menu-trigger" id="userMenuTrigger" type="button" aria-haspopup="true" aria-expanded="false">
+          <span class="user-avatar" id="userAvatar">U</span>
+          <span class="user-name" id="userName">用户</span>
+          <span class="user-caret">▾</span>
+        </button>
+        <div class="user-menu-dropdown" id="userMenuDropdown" hidden>
+          <div class="user-menu-header">
+            <span class="user-name" id="userMenuName">用户</span>
+            <span class="user-role" id="userMenuRole">user</span>
+          </div>
+          <button type="button" class="user-menu-item" id="userMenuProfile">个人资料</button>
+          <button type="button" class="user-menu-item" id="userMenuChangePwd">修改密码</button>
+          <button type="button" class="user-menu-item user-menu-item-danger" id="userMenuLogout">退出登录</button>
+        </div>
+      </div>
+
       <button class="theme-toggle" id="themeToggle" aria-label="切换主题" title="切换深色/浅色主题">
         <svg class="moon-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
         <svg class="sun-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
@@ -1171,6 +1332,82 @@
     </div>
     <div class="gallery-grid" id="galleryGrid"></div>
   </section>
+
+  <!-- 认证模态框 -->
+  <div class="modal-overlay hidden" id="authModal" role="dialog" aria-modal="true" aria-labelledby="authModalTitle">
+    <div class="modal-card auth-modal-card">
+      <button class="modal-close" id="authModalClose" type="button" aria-label="关闭">✕</button>
+
+      <div class="auth-tabs" role="tablist">
+        <button class="auth-tab active" id="authTabLogin" type="button" role="tab" aria-selected="true">登录</button>
+        <button class="auth-tab" id="authTabRegister" type="button" role="tab" aria-selected="false">注册</button>
+      </div>
+
+      <form class="auth-form" id="loginForm" autocomplete="on">
+        <h2 class="auth-title" id="authModalTitle">登录账户</h2>
+        <label class="auth-field">
+          <span>用户名</span>
+          <input type="text" id="loginUsername" name="username" required minlength="3" maxlength="32" autocomplete="username" placeholder="3-32位字母/数字/_-./中文">
+        </label>
+        <label class="auth-field">
+          <span>密码</span>
+          <input type="password" id="loginPassword" name="password" required minlength="6" maxlength="128" autocomplete="current-password" placeholder="6位以上">
+        </label>
+        <div class="auth-error" id="loginError" hidden></div>
+        <button class="auth-submit" type="submit" id="loginSubmit">登 录</button>
+        <div class="auth-hint">还没有账号？<a href="#" id="gotoRegister">立即注册</a></div>
+      </form>
+
+      <form class="auth-form hidden" id="registerForm" autocomplete="on">
+        <h2 class="auth-title">创建账号</h2>
+        <label class="auth-field">
+          <span>用户名 <em class="field-hint">(3-32位，支持中英文/_-.)</em></span>
+          <input type="text" id="registerUsername" name="username" required minlength="3" maxlength="32" autocomplete="username" placeholder="字母/数字/下划线">
+          <span class="field-status" id="usernameStatus"></span>
+        </label>
+        <label class="auth-field">
+          <span>显示名 <em class="field-hint">(可选,默认与用户名相同)</em></span>
+          <input type="text" id="registerDisplayName" name="display_name" maxlength="64" placeholder="如：星空摄影师">
+        </label>
+        <label class="auth-field">
+          <span>密码 <em class="field-hint">(至少6位)</em></span>
+          <input type="password" id="registerPassword" name="password" required minlength="6" maxlength="128" autocomplete="new-password" placeholder="6位以上">
+        </label>
+        <label class="auth-field">
+          <span>确认密码</span>
+          <input type="password" id="registerPasswordConfirm" required minlength="6" maxlength="128" autocomplete="new-password" placeholder="再输入一次">
+        </label>
+        <div class="auth-error" id="registerError" hidden></div>
+        <button class="auth-submit" type="submit" id="registerSubmit">注册并登录</button>
+        <div class="auth-hint">已有账号？<a href="#" id="gotoLogin">直接登录</a></div>
+      </form>
+    </div>
+  </div>
+
+  <!-- 修改密码模态框 -->
+  <div class="modal-overlay hidden" id="changePwdModal" role="dialog" aria-modal="true">
+    <div class="modal-card auth-modal-card">
+      <button class="modal-close" id="changePwdClose" type="button" aria-label="关闭">✕</button>
+      <h2 class="auth-title">修改密码</h2>
+      <form class="auth-form" id="changePwdForm">
+        <label class="auth-field">
+          <span>原密码</span>
+          <input type="password" id="oldPassword" required minlength="6" autocomplete="current-password">
+        </label>
+        <label class="auth-field">
+          <span>新密码 <em class="field-hint">(至少6位)</em></span>
+          <input type="password" id="newPassword" required minlength="6" autocomplete="new-password">
+        </label>
+        <label class="auth-field">
+          <span>确认新密码</span>
+          <input type="password" id="newPasswordConfirm" required minlength="6" autocomplete="new-password">
+        </label>
+        <div class="auth-error" id="changePwdError" hidden></div>
+        <button class="auth-submit" type="submit">更新密码</button>
+        <div class="auth-hint">修改密码后会自动退出所有设备,需重新登录</div>
+      </form>
+    </div>
+  </div>
 
   <!-- Lightbox -->
   <div class="lightbox-overlay hidden" id="lightbox">
@@ -1246,6 +1483,11 @@
       </div>
       <!-- 评论输入框 -->
       <div class="comments-composer" id="commentsComposer">
+        <div class="composer-auth-hint" id="composerAuthHint" hidden>
+          <span>登录后评论将关联到您的账号</span>
+          <button type="button" class="composer-login-btn" id="composerLoginBtn">立即登录</button>
+          <button type="button" class="composer-login-btn" id="composerRegisterBtn" style="background:transparent;color:var(--color-accent);">注册</button>
+        </div>
         <div class="composer-input-wrap" style="display:flex;gap:8px;align-items:flex-start;">
           <textarea id="commentInput" class="composer-textarea" placeholder="写下你的评论…" rows="2" style="flex:1;background:var(--color-bg-deep);border:1px solid var(--color-border-default);border-radius:8px;padding:10px 14px;color:var(--color-gray-100);font-size:14px;resize:none;outline:none;"></textarea>
           <button id="commentSubmitBtn" class="composer-send" style="height:auto;padding:10px 16px;">发送</button>
@@ -2343,6 +2585,13 @@
         currentCommentsPage = page;
         currentCommentsSort = sort;
 
+        // 同步更新评论框登录提示
+        const authHint = document.getElementById('composerAuthHint');
+        if (authHint) {
+          const loggedIn = window.auth && window.auth.isLoggedIn && window.auth.isLoggedIn();
+          authHint.hidden = !!loggedIn;
+        }
+
         body.innerHTML = '<div class="comments-loading"><div class="comments-loading-spinner"></div>正在加载评论…</div>';
 
         try {
@@ -2477,6 +2726,22 @@
         btn.textContent = '发送中…';
 
         try {
+          // 优先使用已登录账户,否则使用访客身份
+          const auth = window.auth || {};
+          const authedUser = auth.isLoggedIn ? auth.getUser() : null;
+          const authedToken = auth.getToken ? auth.getToken() : null;
+          const visitorId = (localStorage.getItem('visitor_id') || '').slice(-4);
+          const username = authedUser
+            ? (authedUser.display_name || authedUser.username)
+            : ('访客' + visitorId);
+
+          const bodyPayload = {
+            image_id: currentImageId,
+            content: content,
+            github_username: username,
+          };
+          if (authedToken) bodyPayload.user_token = authedToken;
+
           const resp = await fetch(
             window.SUPABASE_CONFIG.url + '/functions/v1/comment-api/create',
             {
@@ -2486,11 +2751,7 @@
                 'apikey': window.SUPABASE_CONFIG.anonKey,
                 'Authorization': 'Bearer ' + window.SUPABASE_CONFIG.anonKey
               },
-              body: JSON.stringify({
-                image_id: currentImageId,
-                content: content,
-                github_username: '访客' + (localStorage.getItem('visitor_id') || '').slice(-4)
-              })
+              body: JSON.stringify(bodyPayload)
             }
           );
           if (!resp.ok) throw new Error('HTTP ' + resp.status);
@@ -3031,6 +3292,421 @@
       window.loadAllViewCounts = loadAllViewCounts;
       window.initViewsUI = initViewsUI;
     })();
+  </script>
+
+  <!-- ============================
+       用户认证系统 (注册/登录/退出/修改密码)
+       依赖: window.SUPABASE_CONFIG
+       ============================ -->
+  <script>
+  (function() {
+    'use strict';
+    if (window.__authInitialized) return;
+    window.__authInitialized = true;
+
+    const CFG = window.SUPABASE_CONFIG || {};
+    const SUPABASE_URL = CFG.url || 'https://qlhfyawbyedhqokivezn.supabase.co';
+    const ANON_KEY = CFG.anonKey || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFsaGZ5YXdieWVkaHFva2l2ZXpuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODIyODUyNTUsImV4cCI6MjA5Nzg2MTI1NX0.uJF2_JLDl2cDruSYeHAg4r6ZxZRbsgqhW_xfZ3YZ_Kk';
+    const TOKEN_KEY = 'shungxin_auth_token';
+    const USER_KEY = 'shungxin_auth_user';
+
+    const state = {
+      user: null,
+      token: null,
+    };
+
+    // ----- localStorage -----
+    function loadFromStorage() {
+      try {
+        const t = localStorage.getItem(TOKEN_KEY);
+        const u = localStorage.getItem(USER_KEY);
+        if (t && u) { state.token = t; state.user = JSON.parse(u); }
+      } catch (e) { console.warn('[auth] localStorage read error', e); }
+    }
+    function saveToStorage() {
+      try {
+        if (state.token && state.user) {
+          localStorage.setItem(TOKEN_KEY, state.token);
+          localStorage.setItem(USER_KEY, JSON.stringify(state.user));
+        } else {
+          localStorage.removeItem(TOKEN_KEY);
+          localStorage.removeItem(USER_KEY);
+        }
+      } catch (e) { console.warn('[auth] localStorage write error', e); }
+    }
+
+    // ----- API -----
+    async function authApi(path, method, body) {
+      const headers = {
+        'apikey': ANON_KEY,
+        'Authorization': 'Bearer ' + (state.token || ANON_KEY),
+        'Content-Type': 'application/json',
+      };
+      try {
+        const r = await fetch(SUPABASE_URL + '/functions/v1/auth-api/' + path, {
+          method, headers, body: body ? JSON.stringify(body) : undefined,
+        });
+        const data = await r.json().catch(() => ({}));
+        if (!r.ok) {
+          const msg = data.error || ('请求失败 ' + r.status);
+          const err = new Error(msg);
+          err.status = r.status;
+          err.data = data;
+          throw err;
+        }
+        return data;
+      } catch (e) {
+        if (e.name === 'TypeError') throw new Error('网络异常，请检查连接');
+        throw e;
+      }
+    }
+
+    // ----- UI 同步 -----
+    function renderAuthArea() {
+      const authArea = document.getElementById('authArea');
+      const userMenu = document.getElementById('userMenu');
+      if (!authArea || !userMenu) return;
+      if (state.user) {
+        authArea.hidden = true;
+        userMenu.hidden = false;
+        const name = state.user.display_name || state.user.username;
+        document.getElementById('userName').textContent = name;
+        document.getElementById('userMenuName').textContent = name;
+        document.getElementById('userMenuRole').textContent = state.user.role || 'user';
+        const avatar = document.getElementById('userAvatar');
+        avatar.textContent = (name || '?').charAt(0).toUpperCase();
+        if (state.user.avatar) {
+          avatar.style.backgroundImage = 'url(' + state.user.avatar + ')';
+          avatar.style.backgroundSize = 'cover';
+          avatar.textContent = '';
+        }
+        authArea.dataset.state = 'logged-in';
+        userMenu.dataset.state = 'logged-in';
+      } else {
+        authArea.hidden = false;
+        userMenu.hidden = true;
+        authArea.dataset.state = 'logged-out';
+      }
+    }
+
+    function showError(formId, errId, msg) {
+      const el = document.getElementById(errId);
+      if (!el) return;
+      el.textContent = msg;
+      el.hidden = false;
+    }
+    function hideError(errId) {
+      const el = document.getElementById(errId);
+      if (el) el.hidden = true;
+    }
+
+    // ----- 模态框控制 -----
+    function openAuthModal(tab) {
+      const m = document.getElementById('authModal');
+      if (!m) return;
+      m.classList.remove('hidden');
+      switchTab(tab || 'login');
+      hideError('loginError'); hideError('registerError');
+      setTimeout(() => {
+        const firstInput = m.querySelector('input:not([type=hidden])');
+        if (firstInput) firstInput.focus();
+      }, 100);
+    }
+    function closeAuthModal() {
+      const m = document.getElementById('authModal');
+      if (m) m.classList.add('hidden');
+    }
+    function switchTab(tab) {
+      const tl = document.getElementById('authTabLogin');
+      const tr = document.getElementById('authTabRegister');
+      const fl = document.getElementById('loginForm');
+      const fr = document.getElementById('registerForm');
+      if (tab === 'register') {
+        tl.classList.remove('active'); tl.setAttribute('aria-selected', 'false');
+        tr.classList.add('active');    tr.setAttribute('aria-selected', 'true');
+        fl.classList.add('hidden');    fr.classList.remove('hidden');
+      } else {
+        tr.classList.remove('active'); tr.setAttribute('aria-selected', 'false');
+        tl.classList.add('active');    tl.setAttribute('aria-selected', 'true');
+        fr.classList.add('hidden');    fl.classList.remove('hidden');
+      }
+    }
+
+    // ----- 登录 -----
+    async function doLogin(username, password) {
+      const result = await authApi('login', 'POST', { username, password });
+      state.user = result.user;
+      state.token = result.token;
+      saveToStorage();
+      renderAuthArea();
+      // 通知其他模块
+      window.dispatchEvent(new CustomEvent('auth:login', { detail: { user: state.user, token: state.token } }));
+      return result;
+    }
+    async function doRegister(username, password, displayName) {
+      const result = await authApi('register', 'POST', {
+        username, password,
+        display_name: displayName || username,
+      });
+      state.user = result.user;
+      state.token = result.token;
+      saveToStorage();
+      renderAuthArea();
+      window.dispatchEvent(new CustomEvent('auth:login', { detail: { user: state.user, token: state.token } }));
+      return result;
+    }
+    async function doLogout() {
+      try { await authApi('logout', 'POST'); } catch (e) { console.warn('logout api err', e); }
+      state.user = null; state.token = null;
+      saveToStorage();
+      renderAuthArea();
+      window.dispatchEvent(new CustomEvent('auth:logout'));
+    }
+    async function doChangePassword(oldPwd, newPwd) {
+      const result = await authApi('change-password', 'POST', { old_password: oldPwd, new_password: newPwd });
+      // 改密成功后服务端吊销所有 token,本地也要清掉
+      state.user = null; state.token = null;
+      saveToStorage();
+      renderAuthArea();
+      return result;
+    }
+    async function fetchMe() {
+      if (!state.token) return null;
+      try {
+        const result = await authApi('me', 'GET');
+        state.user = result.user;
+        saveToStorage();
+        renderAuthArea();
+        return result.user;
+      } catch (e) {
+        if (e.status === 401) {
+          state.user = null; state.token = null; saveToStorage();
+          renderAuthArea();
+        }
+        return null;
+      }
+    }
+
+    // ----- 用户名可用性检查 -----
+    let usernameCheckTimer = null;
+    async function checkUsername(username) {
+      const statusEl = document.getElementById('usernameStatus');
+      if (!username || username.length < 3) {
+        if (statusEl) { statusEl.textContent = ''; statusEl.className = 'field-status'; }
+        return;
+      }
+      try {
+        const r = await authApi('check-username?username=' + encodeURIComponent(username), 'GET');
+        if (statusEl) {
+          if (r.available) { statusEl.textContent = '✓ 用户名可用'; statusEl.className = 'field-status ok'; }
+          else { statusEl.textContent = '✗ ' + (r.reason || '用户名已被占用'); statusEl.className = 'field-status err'; }
+        }
+      } catch (e) { /* ignore */ }
+    }
+
+    // ----- 暴露到全局 -----
+    window.auth = {
+      get user() { return state.user; },
+      get token() { return state.token; },
+      isLoggedIn() { return !!state.user; },
+      getToken() { return state.token; },
+      getUser() { return state.user; },
+      openLogin: () => openAuthModal('login'),
+      openRegister: () => openAuthModal('register'),
+      close: closeAuthModal,
+      logout: doLogout,
+      login: doLogin,
+      register: doRegister,
+      fetchMe,
+    };
+
+    // ----- 事件绑定 -----
+    function bindEvents() {
+      document.getElementById('authLoginBtn')?.addEventListener('click', () => openAuthModal('login'));
+      document.getElementById('authRegisterBtn')?.addEventListener('click', () => openAuthModal('register'));
+      document.getElementById('authModalClose')?.addEventListener('click', closeAuthModal);
+      document.getElementById('authTabLogin')?.addEventListener('click', () => switchTab('login'));
+      document.getElementById('authTabRegister')?.addEventListener('click', () => switchTab('register'));
+      document.getElementById('gotoRegister')?.addEventListener('click', (e) => { e.preventDefault(); switchTab('register'); });
+      document.getElementById('gotoLogin')?.addEventListener('click', (e) => { e.preventDefault(); switchTab('login'); });
+
+      // 点击背景关闭
+      document.getElementById('authModal')?.addEventListener('click', (e) => {
+        if (e.target.id === 'authModal') closeAuthModal();
+      });
+      document.getElementById('changePwdModal')?.addEventListener('click', (e) => {
+        if (e.target.id === 'changePwdModal') closeChangePwdModal();
+      });
+
+      // 登录表单
+      document.getElementById('loginForm')?.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const username = document.getElementById('loginUsername').value.trim();
+        const password = document.getElementById('loginPassword').value;
+        const btn = document.getElementById('loginSubmit');
+        const errId = 'loginError';
+        hideError(errId);
+        if (!username || !password) { showError('loginForm', errId, '请填写用户名和密码'); return; }
+        btn.disabled = true; btn.textContent = '登录中...';
+        try {
+          await doLogin(username, password);
+          closeAuthModal();
+          document.getElementById('loginPassword').value = '';
+          if (window.toast) window.toast('登录成功，欢迎 ' + (state.user.display_name || state.user.username), 'success');
+        } catch (err) {
+          showError('loginForm', errId, err.message || '登录失败');
+        } finally {
+          btn.disabled = false; btn.textContent = '登 录';
+        }
+      });
+
+      // 注册表单
+      document.getElementById('registerForm')?.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const username = document.getElementById('registerUsername').value.trim();
+        const displayName = document.getElementById('registerDisplayName').value.trim();
+        const password = document.getElementById('registerPassword').value;
+        const password2 = document.getElementById('registerPasswordConfirm').value;
+        const btn = document.getElementById('registerSubmit');
+        const errId = 'registerError';
+        hideError(errId);
+        if (!username || !password) { showError('registerForm', errId, '请填写用户名和密码'); return; }
+        if (password !== password2) { showError('registerForm', errId, '两次输入的密码不一致'); return; }
+        btn.disabled = true; btn.textContent = '注册中...';
+        try {
+          await doRegister(username, password, displayName);
+          closeAuthModal();
+          document.getElementById('registerPassword').value = '';
+          document.getElementById('registerPasswordConfirm').value = '';
+          if (window.toast) window.toast('注册成功！欢迎 ' + (state.user.display_name || state.user.username), 'success');
+        } catch (err) {
+          showError('registerForm', errId, err.message || '注册失败');
+        } finally {
+          btn.disabled = false; btn.textContent = '注册并登录';
+        }
+      });
+
+      // 用户名可用性实时检查
+      const ru = document.getElementById('registerUsername');
+      if (ru) ru.addEventListener('input', () => {
+        clearTimeout(usernameCheckTimer);
+        const v = ru.value.trim();
+        usernameCheckTimer = setTimeout(() => checkUsername(v), 500);
+      });
+
+      // 用户菜单
+      const trigger = document.getElementById('userMenuTrigger');
+      const dropdown = document.getElementById('userMenuDropdown');
+      if (trigger && dropdown) {
+        trigger.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const open = !dropdown.hidden;
+          dropdown.hidden = open;
+          trigger.setAttribute('aria-expanded', String(!open));
+        });
+        document.addEventListener('click', (e) => {
+          if (!dropdown.contains(e.target) && !trigger.contains(e.target)) {
+            dropdown.hidden = true;
+            trigger.setAttribute('aria-expanded', 'false');
+          }
+        });
+      }
+      document.getElementById('userMenuProfile')?.addEventListener('click', () => {
+        dropdown.hidden = true;
+        if (state.user) {
+          if (window.toast) window.toast(`用户 #${state.user.id} · ${state.user.username}`, 'info');
+        }
+      });
+      document.getElementById('userMenuChangePwd')?.addEventListener('click', () => {
+        dropdown.hidden = true;
+        openChangePwdModal();
+      });
+      document.getElementById('userMenuLogout')?.addEventListener('click', async () => {
+        dropdown.hidden = true;
+        if (!confirm('确定要退出登录吗？')) return;
+        await doLogout();
+        if (window.toast) window.toast('已退出登录', 'info');
+      });
+      document.getElementById('changePwdClose')?.addEventListener('click', closeChangePwdModal);
+
+      // 评论框里的登录/注册入口
+      document.getElementById('composerLoginBtn')?.addEventListener('click', () => {
+        if (window.auth) window.auth.openLogin();
+      });
+      document.getElementById('composerRegisterBtn')?.addEventListener('click', () => {
+        if (window.auth) window.auth.openRegister();
+      });
+      // 登录状态变化时,刷新评论框登录提示
+      window.addEventListener('auth:login', () => {
+        const h = document.getElementById('composerAuthHint');
+        if (h) h.hidden = true;
+      });
+      window.addEventListener('auth:logout', () => {
+        const h = document.getElementById('composerAuthHint');
+        if (h) h.hidden = false;
+      });
+
+      // 修改密码表单
+      document.getElementById('changePwdForm')?.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const oldPwd = document.getElementById('oldPassword').value;
+        const newPwd = document.getElementById('newPassword').value;
+        const newPwd2 = document.getElementById('newPasswordConfirm').value;
+        const errId = 'changePwdError';
+        hideError(errId);
+        if (!oldPwd || !newPwd) { showError('changePwdForm', errId, '请填写完整'); return; }
+        if (newPwd !== newPwd2) { showError('changePwdForm', errId, '两次输入的新密码不一致'); return; }
+        if (oldPwd === newPwd) { showError('changePwdForm', errId, '新密码不能与原密码相同'); return; }
+        try {
+          const btn = e.target.querySelector('button[type=submit]');
+          btn.disabled = true; btn.textContent = '更新中...';
+          await doChangePassword(oldPwd, newPwd);
+          closeChangePwdModal();
+          e.target.reset();
+          if (window.toast) window.toast('密码已更新，请重新登录', 'success');
+        } catch (err) {
+          showError('changePwdForm', errId, err.message || '更新失败');
+        } finally {
+          const btn = e.target.querySelector('button[type=submit]');
+          if (btn) { btn.disabled = false; btn.textContent = '更新密码'; }
+        }
+      });
+
+      // ESC 关闭
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+          if (!document.getElementById('authModal').classList.contains('hidden')) closeAuthModal();
+          if (!document.getElementById('changePwdModal').classList.contains('hidden')) closeChangePwdModal();
+        }
+      });
+    }
+
+    function openChangePwdModal() {
+      const m = document.getElementById('changePwdModal');
+      if (m) m.classList.remove('hidden');
+      hideError('changePwdError');
+      setTimeout(() => document.getElementById('oldPassword')?.focus(), 100);
+    }
+    function closeChangePwdModal() {
+      const m = document.getElementById('changePwdModal');
+      if (m) m.classList.add('hidden');
+    }
+
+    // ----- 启动 -----
+    function init() {
+      loadFromStorage();
+      renderAuthArea();
+      bindEvents();
+      // 异步刷新用户信息(token 可能已过期)
+      if (state.token) fetchMe();
+      console.log('[auth] initialized, user:', state.user ? state.user.username : 'guest');
+    }
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', init);
+    } else {
+      init();
+    }
+  })();
   </script>
 </body>
 </html>

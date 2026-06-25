@@ -112,7 +112,7 @@ async function handleCreateComment(req) {
   let body;
   try { body = await req.json(); } catch { return createErrorResponse('请求体必须是有效的 JSON', 400); }
 
-  const { image_id, content, github_username, github_avatar, rating, parent_id } = body;
+  const { image_id, content, github_username, github_avatar, rating, parent_id, user_id, user_token } = body;
 
   if (!image_id || typeof image_id !== 'number' || image_id <= 0) return createErrorResponse('image_id 无效', 400);
   if (!content || typeof content !== 'string' || content.trim().length < 2) return createErrorResponse('评论内容至少2个字符', 400);
@@ -125,10 +125,24 @@ async function handleCreateComment(req) {
     return createErrorResponse(`评论过于频繁，请在 ${Math.ceil((rateCheck.resetAt - Date.now()) / 1000)} 秒后重试`, 429);
   }
 
+  // 可选:验证 user_token,关联到 users.id
+  let authedUserId = null;
+  if (user_token && typeof user_token === 'string') {
+    try {
+      const verifyResp = await fetch(`${SUPABASE_URL}/functions/v1/auth-api/me`, {
+        headers: { 'Authorization': `Bearer ${user_token}` },
+      });
+      if (verifyResp.ok) {
+        const me = await verifyResp.json();
+        if (me && me.user && me.user.id) authedUserId = me.user.id;
+      }
+    } catch (e) { console.warn('user_token 验证失败:', e); }
+  }
+
   const cleanContent = await filterSensitiveWords(content.trim());
   const supabase = createServiceClient();
 
-  const { data: comment, error } = await supabase.from('comments').insert({
+  const insertPayload = {
     image_id, content: cleanContent,
     github_username: github_username || '匿名用户',
     github_avatar: github_avatar || null,
@@ -136,7 +150,10 @@ async function handleCreateComment(req) {
     parent_id: parent_id || null,
     status: 'approved', source: 'local',
     created_at: new Date().toISOString(),
-  }).select().single();
+  };
+  if (authedUserId) insertPayload.user_id = authedUserId;
+
+  const { data: comment, error } = await supabase.from('comments').insert(insertPayload).select().single();
 
   if (error) { console.error('创建评论失败:', error); return createErrorResponse('创建评论失败', 500); }
 
