@@ -1,0 +1,13 @@
+{
+  "name": "shungxin-gallery",
+  "version": "1.0.0",
+  "private": true,
+  "description": "shungxin 个人摄影作品集 + 管理后台",
+  "scripts": {
+    "start": "npx http-server -p 8080 -c-1 --cors",
+    "start:admin": "echo 打开 http://localhost:8080/admin.html"
+  },
+  "devDependencies": {
+    "http-server": "^14.1.1"
+  }
+}

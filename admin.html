@@ -1,0 +1,1548 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>shungxin-gallery · 管理后台</title>
+<style>
+  :root {
+    --bg: #0f1115;
+    --bg-2: #1a1d24;
+    --bg-3: #232830;
+    --border: #2d3340;
+    --text: #e6e8ed;
+    --text-2: #9ba1ad;
+    --text-3: #6b7280;
+    --accent: #4f8eff;
+    --accent-hover: #6ba1ff;
+    --success: #34d399;
+    --warning: #fbbf24;
+    --danger: #f87171;
+    --info: #60a5fa;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    font-size: 14px;
+  }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { color: var(--accent-hover); }
+  button { font-family: inherit; cursor: pointer; border: none; outline: none; }
+  input, select, textarea { font-family: inherit; outline: none; }
+  code { font-family: 'JetBrains Mono', 'Consolas', monospace; background: var(--bg-3); padding: 1px 5px; border-radius: 3px; font-size: 12px; }
+
+  /* ==================== 登录页 ==================== */
+  .login-wrap {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: radial-gradient(circle at 50% 50%, #1a1d24 0%, #0f1115 70%);
+  }
+  .login-card {
+    width: 360px;
+    background: var(--bg-2);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 32px 28px;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.4);
+  }
+  .login-card h1 {
+    font-size: 20px;
+    margin-bottom: 4px;
+    text-align: center;
+  }
+  .login-card .subtitle {
+    text-align: center;
+    color: var(--text-2);
+    font-size: 12px;
+    margin-bottom: 24px;
+  }
+  .form-group { margin-bottom: 14px; }
+  .form-group label {
+    display: block;
+    color: var(--text-2);
+    font-size: 12px;
+    margin-bottom: 6px;
+  }
+  .form-group input, .form-group select {
+    width: 100%;
+    padding: 9px 12px;
+    background: var(--bg-3);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    font-size: 14px;
+    transition: border-color 0.15s;
+  }
+  .form-group input:focus, .form-group select:focus {
+    border-color: var(--accent);
+  }
+  .btn {
+    padding: 9px 18px;
+    background: var(--accent);
+    color: white;
+    border-radius: 6px;
+    font-size: 14px;
+    transition: background 0.15s;
+  }
+  .btn:hover:not(:disabled) { background: var(--accent-hover); }
+  .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  .btn-block { width: 100%; padding: 11px; }
+  .btn-secondary { background: var(--bg-3); color: var(--text); }
+  .btn-secondary:hover:not(:disabled) { background: var(--border); }
+  .btn-danger { background: var(--danger); }
+  .btn-danger:hover:not(:disabled) { background: #fca5a5; }
+  .btn-sm { padding: 4px 10px; font-size: 12px; }
+  .alert {
+    padding: 10px 12px;
+    border-radius: 6px;
+    margin-bottom: 14px;
+    font-size: 13px;
+  }
+  .alert-error { background: rgba(248,113,113,0.12); color: var(--danger); border: 1px solid rgba(248,113,113,0.3); }
+  .alert-info  { background: rgba(96,165,250,0.12); color: var(--info);   border: 1px solid rgba(96,165,250,0.3); }
+  .alert-success { background: rgba(52,211,153,0.12); color: var(--success); border: 1px solid rgba(52,211,153,0.3); }
+
+  /* ==================== 主布局 ==================== */
+  .layout { display: grid; grid-template-columns: 220px 1fr; min-height: 100vh; }
+  .sidebar {
+    background: var(--bg-2);
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+  }
+  .sidebar-header {
+    padding: 20px 18px;
+    border-bottom: 1px solid var(--border);
+  }
+  .sidebar-header .title { font-size: 15px; font-weight: 600; }
+  .sidebar-header .role { font-size: 11px; color: var(--text-3); margin-top: 2px; }
+  .nav { padding: 12px 8px; flex: 1; }
+  .nav-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 12px;
+    color: var(--text-2);
+    border-radius: 6px;
+    cursor: pointer;
+    margin-bottom: 2px;
+    transition: background 0.15s, color 0.15s;
+  }
+  .nav-item:hover { background: var(--bg-3); color: var(--text); }
+  .nav-item.active { background: var(--accent); color: white; }
+  .nav-item .icon { font-size: 16px; width: 16px; text-align: center; }
+  .sidebar-footer {
+    padding: 12px 18px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .sidebar-footer .user { font-size: 12px; color: var(--text-2); }
+
+  .main { padding: 24px 32px; overflow-y: auto; }
+  .page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 24px;
+  }
+  .page-title { font-size: 22px; font-weight: 600; }
+  .page-subtitle { color: var(--text-2); font-size: 12px; margin-top: 4px; }
+
+  /* ==================== 仪表板卡片 ==================== */
+  .stat-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 14px;
+    margin-bottom: 24px;
+  }
+  .stat-card {
+    background: var(--bg-2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 18px 20px;
+  }
+  .stat-card .label {
+    color: var(--text-2);
+    font-size: 12px;
+    margin-bottom: 8px;
+  }
+  .stat-card .value {
+    font-size: 28px;
+    font-weight: 600;
+    color: var(--text);
+  }
+  .stat-card .delta {
+    font-size: 12px;
+    color: var(--text-3);
+    margin-top: 4px;
+  }
+  .stat-card .delta.up { color: var(--success); }
+  .stat-card .delta.down { color: var(--danger); }
+  .stat-card.blue   { border-top: 3px solid var(--info); }
+  .stat-card.green  { border-top: 3px solid var(--success); }
+  .stat-card.yellow { border-top: 3px solid var(--warning); }
+  .stat-card.red    { border-top: 3px solid var(--danger); }
+  .stat-card.purple { border-top: 3px solid #a78bfa; }
+
+  /* ==================== 趋势图(纯 CSS) ==================== */
+  .trend-card {
+    background: var(--bg-2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 18px 20px;
+    margin-bottom: 24px;
+  }
+  .trend-card h3 { font-size: 14px; margin-bottom: 14px; color: var(--text-2); }
+  .trend-bars {
+    display: flex;
+    align-items: flex-end;
+    gap: 6px;
+    height: 100px;
+  }
+  .trend-bars .bar {
+    flex: 1;
+    background: linear-gradient(180deg, var(--accent), #2563eb);
+    border-radius: 3px 3px 0 0;
+    min-height: 4px;
+    position: relative;
+    transition: opacity 0.15s;
+  }
+  .trend-bars .bar:hover { opacity: 0.85; }
+  .trend-bars .bar .label {
+    position: absolute;
+    top: -18px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 10px;
+    color: var(--text-2);
+  }
+  .trend-bars .bar .date {
+    position: absolute;
+    bottom: -20px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 10px;
+    color: var(--text-3);
+  }
+
+  /* ==================== 表格 ==================== */
+  .toolbar {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    margin-bottom: 14px;
+    flex-wrap: wrap;
+  }
+  .toolbar .spacer { flex: 1; }
+  .toolbar input, .toolbar select {
+    padding: 7px 11px;
+    background: var(--bg-3);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    font-size: 13px;
+  }
+  .table-wrap {
+    background: var(--bg-2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+  }
+  th, td {
+    padding: 10px 14px;
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+  }
+  th {
+    background: var(--bg-3);
+    color: var(--text-2);
+    font-weight: 500;
+    font-size: 12px;
+  }
+  tr:last-child td { border-bottom: none; }
+  tr:hover { background: var(--bg-3); }
+  .badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 500;
+  }
+  .badge-admin { background: rgba(167,139,250,0.2); color: #a78bfa; }
+  .badge-user  { background: rgba(96,165,250,0.2); color: var(--info); }
+  .badge-active   { background: rgba(52,211,153,0.2); color: var(--success); }
+  .badge-inactive { background: rgba(248,113,113,0.2); color: var(--danger); }
+  .badge-approved { background: rgba(52,211,153,0.2); color: var(--success); }
+  .badge-pending  { background: rgba(251,191,36,0.2); color: var(--warning); }
+  .badge-rejected { background: rgba(248,113,113,0.2); color: var(--danger); }
+  .empty-state {
+    text-align: center;
+    color: var(--text-3);
+    padding: 40px 20px;
+  }
+  .pagination {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 14px;
+    border-top: 1px solid var(--border);
+    color: var(--text-2);
+    font-size: 12px;
+  }
+  .pagination .pages { display: flex; gap: 4px; }
+  .pagination .pages button {
+    background: var(--bg-3);
+    color: var(--text-2);
+    padding: 4px 10px;
+    border-radius: 4px;
+    font-size: 12px;
+  }
+  .pagination .pages button:hover:not(:disabled) { background: var(--border); }
+  .pagination .pages button.active { background: var(--accent); color: white; }
+  .pagination .pages button:disabled { opacity: 0.4; }
+
+  /* ==================== 图片管理 ==================== */
+  .image-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 12px;
+  }
+  .image-card {
+    background: var(--bg-2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+    transition: transform 0.15s;
+  }
+  .image-card:hover { transform: translateY(-2px); }
+  .image-card .thumb {
+    width: 100%;
+    aspect-ratio: 1;
+    background: var(--bg-3) center/cover no-repeat;
+    position: relative;
+  }
+  .image-card .thumb .status-tag {
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-size: 10px;
+    font-weight: 500;
+  }
+  .image-card .thumb .status-tag.hidden { background: rgba(248,113,113,0.85); color: white; }
+  .image-card .thumb .status-tag.new { background: rgba(52,211,153,0.85); color: white; }
+  .image-card .info {
+    padding: 10px 12px;
+  }
+  .image-card .info .name {
+    font-size: 12px;
+    color: var(--text);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .image-card .info .meta {
+    font-size: 11px;
+    color: var(--text-3);
+    margin-top: 4px;
+    display: flex;
+    gap: 8px;
+  }
+  .image-card .actions {
+    display: flex;
+    gap: 4px;
+    padding: 0 12px 10px;
+  }
+
+  /* ==================== 通用 ==================== */
+  .toast {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    padding: 11px 18px;
+    background: var(--bg-2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    z-index: 9999;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+    animation: slideIn 0.2s ease-out;
+  }
+  .toast.success { border-left: 3px solid var(--success); }
+  .toast.error   { border-left: 3px solid var(--danger); }
+  @keyframes slideIn {
+    from { transform: translateX(20px); opacity: 0; }
+    to { transform: translateX(0); opacity: 1; }
+  }
+  .loading { text-align: center; color: var(--text-2); padding: 40px; }
+  .spinner {
+    display: inline-block;
+    width: 16px; height: 16px;
+    border: 2px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .hidden { display: none !important; }
+
+  .text-muted { color: var(--text-3); }
+  .text-success { color: var(--success); }
+  .text-danger  { color: var(--danger); }
+  .row { display: flex; gap: 10px; align-items: center; }
+  .avatar {
+    width: 28px; height: 28px;
+    border-radius: 50%;
+    background: var(--bg-3);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-2);
+    font-size: 12px;
+    font-weight: 500;
+  }
+
+  /* ==================== 批量操作栏 ==================== */
+  .batch-bar {
+    background: linear-gradient(90deg, rgba(79,142,255,0.18), rgba(167,139,250,0.12));
+    border: 1px solid var(--accent);
+    border-radius: 8px;
+    padding: 10px 14px;
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    animation: slideDown 0.18s ease-out;
+  }
+  @keyframes slideDown {
+    from { transform: translateY(-6px); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
+  }
+  .batch-bar .selected-info {
+    font-size: 13px;
+    color: var(--text);
+  }
+  .batch-bar .selected-info b {
+    color: var(--accent);
+    font-weight: 600;
+    margin: 0 3px;
+  }
+  .batch-bar .divider {
+    width: 1px; height: 20px;
+    background: var(--border);
+  }
+  .batch-bar .btn { font-size: 12px; padding: 6px 12px; }
+
+  /* 选中行高亮 */
+  tr.row-selected { background: rgba(79,142,255,0.10) !important; }
+  tr.row-selected:hover { background: rgba(79,142,255,0.16) !important; }
+
+  /* 表格里的 checkbox */
+  table input[type="checkbox"] {
+    cursor: pointer;
+    width: 15px; height: 15px;
+    accent-color: var(--accent);
+  }
+  th.check-col, td.check-col { width: 32px; padding-left: 14px; padding-right: 0; }
+</style>
+</head>
+<body>
+
+<!-- ==================== 登录页 ==================== -->
+<div id="loginView" class="login-wrap">
+  <div class="login-card">
+    <h1>管理后台</h1>
+    <p class="subtitle">需要管理员账号登录</p>
+    <div id="loginError"></div>
+    <form id="loginForm" autocomplete="off">
+      <div class="form-group">
+        <label>用户名</label>
+        <input type="text" name="username" required autocomplete="username" placeholder="管理员用户名">
+      </div>
+      <div class="form-group">
+        <label>密码</label>
+        <input type="password" name="password" required autocomplete="current-password" placeholder="密码">
+      </div>
+      <button type="submit" class="btn btn-block" id="loginBtn">登录</button>
+    </form>
+    <p class="text-muted" style="text-align:center;margin-top:16px;font-size:11px;">
+      访问普通网站 · <a href="index.html">返回首页</a>
+    </p>
+  </div>
+</div>
+
+<!-- ==================== 主控制台 ==================== -->
+<div id="mainView" class="layout hidden">
+  <aside class="sidebar">
+    <div class="sidebar-header">
+      <div class="title">shungxin-gallery</div>
+      <div class="role">管理后台 · v1.0</div>
+    </div>
+    <nav class="nav">
+      <div class="nav-item active" data-page="dashboard"><span class="icon">▦</span>仪表板</div>
+      <div class="nav-item" data-page="users"><span class="icon">◉</span>用户管理</div>
+      <div class="nav-item" data-page="images"><span class="icon">▣</span>图片管理</div>
+      <div class="nav-item" data-page="comments"><span class="icon">▤</span>评论管理</div>
+      <div class="nav-item" data-page="audit"><span class="icon">▥</span>审计日志</div>
+    </nav>
+    <div class="sidebar-footer">
+      <span class="user" id="userInfo">—</span>
+      <button class="btn btn-secondary btn-sm" id="logoutBtn">退出</button>
+    </div>
+  </aside>
+  <main class="main">
+    <div id="pageContainer"></div>
+  </main>
+</div>
+
+<!-- ==================== 模态框 ==================== -->
+<div id="modal" class="hidden" style="position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:100;display:flex;align-items:center;justify-content:center;">
+  <div style="background:var(--bg-2);border:1px solid var(--border);border-radius:10px;width:480px;max-width:90vw;max-height:80vh;overflow-y:auto;">
+    <div id="modalContent"></div>
+  </div>
+</div>
+
+<script>
+// ============================
+// 配置
+// ============================
+const SUPABASE_URL = 'qlhfyawbyedhqokivezn.supabase.co';
+const ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFsaGZ5YXdieWVkaHFva2l2ZXpuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODIyODUyNTUsImV4cCI6MjA5Nzg2MTI1NX0.uJF2_JLDl2cDruSYeHAg4r6ZxZRbsgqhW_xfZ3YZ_Kk';
+const ADMIN_API = `https://${SUPABASE_URL}/functions/v1/admin-api`;
+const UPLOAD_API = `https://${SUPABASE_URL}/functions/v1/upload-image`;
+
+const State = {
+  user: null,
+  token: null,
+  currentPage: 'dashboard',
+  pageState: {},  // 各页面的查询状态(分页/筛选)
+  selection: { users: new Set(), images: new Set(), comments: new Set() },  // 批量选择
+};
+
+// 当前页的 selection getter/setter(代码更整洁)
+function getSelection() { return State.selection[State.currentPage] || new Set(); }
+function toggleSelected(id) {
+  const s = State.selection[State.currentPage] || new Set();
+  if (s.has(id)) s.delete(id); else s.add(id);
+  State.selection[State.currentPage] = s;
+  // 同步该行 + 全选 checkbox 的视觉,不重载整个列表
+  syncRowCheckVisual(id, s.has(id));
+  syncAllCheckVisual();
+  renderBatchBar();
+}
+function clearSelection() {
+  State.selection[State.currentPage] = new Set();
+  // 清掉所有 row-check + all-check
+  $$('input.row-check, input.all-check').forEach(c => c.checked = false);
+  // 去掉行高亮
+  $$('.row-selected').forEach(tr => tr.classList.remove('row-selected'));
+  renderBatchBar();
+}
+
+// 单行 checkbox 视觉同步(不重载列表)
+function syncRowCheckVisual(id, checked) {
+  // 找对应的 row-check(用户/评论页) 或 image-check(图片页)
+  const cb = document.querySelector(`input.row-check[data-id="${id}"], input.image-check[data-id="${id}"]`);
+  if (cb) cb.checked = checked;
+  // 找最近的 tr / .image-card 加/去高亮
+  const row = cb ? cb.closest('tr, .image-card') : null;
+  if (row) {
+    row.classList.toggle('row-selected', checked);
+    // 图片卡片的 outline 用内联样式(行覆盖样式)
+    if (row.classList.contains('image-card')) {
+      row.style.outline = checked ? '2px solid var(--accent)' : '';
+    }
+  }
+}
+
+// 全选 checkbox 视觉同步
+function syncAllCheckVisual() {
+  const allCb = document.querySelector('input.all-check');
+  if (!allCb) return;
+  const sel = getSelection();
+  // 当前页可见的所有 row-check 中,选中的数量
+  const visibleChecks = $$('input.row-check');
+  if (visibleChecks.length === 0) { allCb.checked = false; return; }
+  const allChecked = visibleChecks.every(c => sel.has(parseInt(c.dataset.id)));
+  allCb.checked = allChecked;
+}
+
+// ============================
+// 工具
+// ============================
+function $(s, root = document) { return root.querySelector(s); }
+function $$(s, root = document) { return Array.from(root.querySelectorAll(s)); }
+function fmtNum(n) { return (n || 0).toLocaleString(); }
+function fmtDate(s) { if (!s) return '—'; const d = new Date(s); return d.toLocaleString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }); }
+function fmtRelative(s) {
+  if (!s) return '—';
+  const diff = Date.now() - new Date(s).getTime();
+  const m = Math.floor(diff / 60000);
+  if (m < 1) return '刚刚';
+  if (m < 60) return m + ' 分钟前';
+  const h = Math.floor(m / 60);
+  if (h < 24) return h + ' 小时前';
+  const d = Math.floor(h / 24);
+  if (d < 30) return d + ' 天前';
+  return fmtDate(s);
+}
+function escapeHtml(s) {
+  return String(s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
+}
+function toast(msg, type = 'success') {
+  const t = document.createElement('div');
+  t.className = 'toast ' + type;
+  t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(() => t.remove(), 2500);
+}
+function confirmAction(message) { return confirm(message); }
+
+async function api(path, opts = {}) {
+  const url = path.startsWith('http') ? path : ADMIN_API + path;
+  const headers = {
+    'Content-Type': 'application/json',
+    'apikey': ANON_KEY,
+    ...(opts.headers || {}),
+  };
+  if (State.token) headers['Authorization'] = 'Bearer ' + State.token;
+  const res = await fetch(url, { ...opts, headers });
+  let data;
+  try { data = await res.json(); } catch {
+    throw new Error('服务器响应异常 (HTTP ' + res.status + '),请检查 admin-api 是否已部署');
+  }
+  if (!res.ok) throw new Error(data.error || data.message || ('HTTP ' + res.status));
+  return data;
+}
+
+// ============================
+// 鉴权流程
+// ============================
+function loadAuth() {
+  const raw = localStorage.getItem('admin_auth');
+  if (!raw) return false;
+  try {
+    const { token, user, exp } = JSON.parse(raw);
+    if (Date.now() > exp) {
+      localStorage.removeItem('admin_auth');
+      return false;
+    }
+    State.token = token;
+    State.user = user;
+    return true;
+  } catch { return false; }
+}
+function saveAuth(token, user) {
+  State.token = token;
+  State.user = user;
+  localStorage.setItem('admin_auth', JSON.stringify({
+    token, user, exp: Date.now() + 6 * 24 * 60 * 60 * 1000,  // 6 天(早于 token 7 天过期)
+  }));
+}
+function clearAuth() {
+  State.token = null;
+  State.user = null;
+  localStorage.removeItem('admin_auth');
+}
+
+async function doLogin(username, password) {
+  // 复用 auth-api 的 login 接口,但额外校验 role=admin
+  const res = await fetch(`https://${SUPABASE_URL}/functions/v1/auth-api/login`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'apikey': ANON_KEY,
+      'Authorization': 'Bearer ' + ANON_KEY,
+    },
+    body: JSON.stringify({ username, password }),
+  });
+  let data;
+  try { data = await res.json(); } catch {
+    throw new Error('服务器响应异常 (HTTP ' + res.status + '),请稍后重试');
+  }
+  if (!res.ok) throw new Error(data.error || data.message || ('登录失败 (HTTP ' + res.status + ')'));
+  if (!data.user || data.user.role !== 'admin') {
+    throw new Error('该账号不是管理员');
+  }
+  saveAuth(data.token, data.user);
+  return data.user;
+}
+
+// ============================
+// 登录页事件
+// ============================
+$('#loginForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const form = e.target;
+  const btn = $('#loginBtn');
+  const errBox = $('#loginError');
+  errBox.innerHTML = '';
+  const username = form.username.value.trim();
+  const password = form.password.value;
+  if (!username || !password) return;
+  btn.disabled = true; btn.textContent = '登录中...';
+  try {
+    const user = await doLogin(username, password);
+    showMainView(user);
+  } catch (err) {
+    errBox.innerHTML = '<div class="alert alert-error">' + escapeHtml(err.message) + '</div>';
+  } finally {
+    btn.disabled = false; btn.textContent = '登录';
+  }
+});
+
+// ============================
+// 主控制台
+// ============================
+function showMainView(user) {
+  $('#loginView').classList.add('hidden');
+  $('#mainView').classList.remove('hidden');
+  $('#userInfo').textContent = (user.display_name || user.username) + ' (admin)';
+  loadPage('dashboard');
+}
+
+$('#logoutBtn').addEventListener('click', () => {
+  if (!confirmAction('确定要退出登录吗?')) return;
+  clearAuth();
+  location.reload();
+});
+
+$$('.nav-item').forEach(item => {
+  item.addEventListener('click', () => {
+    $$('.nav-item').forEach(n => n.classList.remove('active'));
+    item.classList.add('active');
+    loadPage(item.dataset.page);
+  });
+});
+
+async function loadPage(page) {
+  State.currentPage = page;
+  // 切页时清掉旧页的 selection,避免泄漏
+  if (State.selection[page] !== undefined) {
+    State.selection[page] = new Set();
+  }
+  const c = $('#pageContainer');
+  c.innerHTML = '<div class="loading"><span class="spinner"></span> 加载中...</div>';
+  try {
+    if (page === 'dashboard') await renderDashboard(c);
+    else if (page === 'users')     await renderUsers(c);
+    else if (page === 'images')    await renderImages(c);
+    else if (page === 'comments')  await renderComments(c);
+    else if (page === 'audit')     await renderAudit(c);
+  } catch (err) {
+    c.innerHTML = '<div class="alert alert-error">' + escapeHtml(err.message) + '</div>';
+  }
+}
+
+// ============================
+// 仪表板
+// ============================
+async function renderDashboard(c) {
+  c.innerHTML = '<div class="page-header"><div><div class="page-title">仪表板</div><div class="page-subtitle">网站整体运营情况</div></div></div><div id="dashBody"><div class="loading"><span class="spinner"></span></div></div>';
+  const { data } = await api('/dashboard');
+  const body = $('#dashBody');
+  body.innerHTML = `
+    <div class="stat-grid">
+      <div class="stat-card blue">
+        <div class="label">总用户数</div>
+        <div class="value">${fmtNum(data.users.total)}</div>
+        <div class="delta up">今日新增 +${fmtNum(data.users.new_today)}</div>
+      </div>
+      <div class="stat-card green">
+        <div class="label">活跃用户</div>
+        <div class="value">${fmtNum(data.users.active)}</div>
+        <div class="delta">${fmtNum(data.users.new_7d)} / 7 天</div>
+      </div>
+      <div class="stat-card yellow">
+        <div class="label">总评论数</div>
+        <div class="value">${fmtNum(data.comments.total)}</div>
+        <div class="delta">${fmtNum(data.comments.pending)} 待审核</div>
+      </div>
+      <div class="stat-card purple">
+        <div class="label">总图片数</div>
+        <div class="value">${fmtNum(data.images.total)}</div>
+        <div class="delta">${fmtNum(data.images.visible)} 可见</div>
+      </div>
+      <div class="stat-card red">
+        <div class="label">总点赞数</div>
+        <div class="value">${fmtNum(data.likes.total)}</div>
+        <div class="delta up">今日 +${fmtNum(data.likes.today)}</div>
+      </div>
+      <div class="stat-card blue">
+        <div class="label">总浏览量</div>
+        <div class="value">${fmtNum(data.views.total)}</div>
+        <div class="delta up">今日 +${fmtNum(data.views.today)}</div>
+      </div>
+    </div>
+    <div class="trend-card">
+      <h3>近 7 天用户注册趋势</h3>
+      <div class="trend-bars" id="trendBars"></div>
+    </div>
+    <div class="text-muted" style="text-align:right;font-size:11px;margin-top:12px;">
+      数据更新于 ${fmtDate(data.generated_at)}
+    </div>
+  `;
+  // 渲染趋势条
+  const trend = data.user_growth_7d || [];
+  const max = Math.max(1, ...trend.map(t => t.count));
+  const html = trend.map(t => {
+    const h = Math.round((t.count / max) * 90) + 4;
+    return `<div class="bar" style="height:${h}px;" title="${t.date}: ${t.count} 人">
+      ${t.count > 0 ? `<span class="label">${t.count}</span>` : ''}
+      <span class="date">${t.date.slice(5)}</span>
+    </div>`;
+  }).join('');
+  $('#trendBars').innerHTML = html;
+}
+
+// ============================
+// 用户管理
+// ============================
+async function renderUsers(c) {
+  c.innerHTML = `
+    <div class="page-header">
+      <div><div class="page-title">用户管理</div><div class="page-subtitle">查看/禁用/删除/管理用户角色</div></div>
+    </div>
+    <div id="userBatchBar"></div>
+    <div class="toolbar">
+      <input type="text" id="userSearch" placeholder="搜索用户名/昵称" style="min-width:200px;">
+      <select id="userRoleFilter">
+        <option value="">所有角色</option>
+        <option value="user">用户</option>
+        <option value="admin">管理员</option>
+      </select>
+      <select id="userStatusFilter">
+        <option value="">所有状态</option>
+        <option value="active">启用</option>
+        <option value="inactive">禁用</option>
+      </select>
+      <button class="btn btn-sm" id="userSearchBtn">搜索</button>
+      <span class="spacer"></span>
+    </div>
+    <div id="userList" class="table-wrap">
+      <div class="loading"><span class="spinner"></span></div>
+    </div>
+  `;
+  $('#userSearchBtn').onclick = () => loadUsers();
+  $('#userSearch').onkeydown = e => { if (e.key === 'Enter') loadUsers(); };
+
+  if (!State.pageState.users) State.pageState.users = { page: 1, pageSize: 20, search: '', role: '', status: '' };
+  $('#userSearch').value = State.pageState.users.search;
+  $('#userRoleFilter').value = State.pageState.users.role;
+  $('#userStatusFilter').value = State.pageState.users.status;
+  await loadUsers();
+}
+
+async function loadUsers() {
+  const s = State.pageState.users;
+  s.search = $('#userSearch').value.trim();
+  s.role = $('#userRoleFilter').value;
+  s.status = $('#userStatusFilter').value;
+  const params = new URLSearchParams({
+    page: s.page, pageSize: s.pageSize,
+    search: s.search, role: s.role, status: s.status,
+  });
+  const { data } = await api('/users?' + params);
+  renderUserTable(data);
+}
+
+function renderUserTable({ users, total, page, pageSize }) {
+  renderBatchBar();
+  const list = $('#userList');
+  if (!list) return; // 切页/重渲染期间容器已消失,直接放弃
+  if (!users.length) {
+    list.innerHTML = '<div class="empty-state">暂无用户</div>';
+    return;
+  }
+  const selected = getSelection();
+  const allSelected = users.length > 0 && users.every(u => selected.has(u.id));
+  const html = `
+    <table>
+      <thead><tr>
+        <th class="check-col"><input type="checkbox" class="all-check" id="userCheckAll" ${allSelected ? 'checked' : ''}></th>
+        <th>ID</th><th>用户</th><th>角色</th><th>状态</th>
+        <th>注册时间</th><th>最后登录</th><th>操作</th>
+      </tr></thead>
+      <tbody>${users.map(u => `
+        <tr class="${selected.has(u.id) ? 'row-selected' : ''}">
+          <td class="check-col"><input type="checkbox" class="row-check" data-id="${u.id}" ${selected.has(u.id) ? 'checked' : ''}></td>
+          <td><code>${u.id}</code></td>
+          <td>
+            <div class="row">
+              <span class="avatar">${escapeHtml((u.display_name || u.username).charAt(0).toUpperCase())}</span>
+              <div>
+                <div>${escapeHtml(u.display_name || u.username)}</div>
+                <div class="text-muted" style="font-size:11px;">@${escapeHtml(u.username)}</div>
+              </div>
+            </div>
+          </td>
+          <td><span class="badge ${u.role === 'admin' ? 'badge-admin' : 'badge-user'}">${u.role}</span></td>
+          <td><span class="badge ${u.is_active ? 'badge-active' : 'badge-inactive'}">${u.is_active ? '启用' : '禁用'}</span></td>
+          <td>${fmtDate(u.created_at)}</td>
+          <td>${fmtRelative(u.last_login_at)}</td>
+          <td>
+            <button class="btn btn-sm btn-secondary" onclick="toggleUserStatus(${u.id}, ${!u.is_active})">${u.is_active ? '禁用' : '启用'}</button>
+            <button class="btn btn-sm btn-secondary" onclick="toggleUserRole(${u.id}, '${u.role === 'admin' ? 'user' : 'admin'}')">${u.role === 'admin' ? '降级' : '升级'}</button>
+            <button class="btn btn-sm btn-danger" onclick="deleteUser(${u.id}, '${escapeHtml(u.username)}')">删除</button>
+          </td>
+        </tr>
+      `).join('')}</tbody>
+    </table>
+    ${renderPagination(total, page, pageSize, 'State.pageState.users.page = $1; loadUsers();')}
+  `;
+  list.innerHTML = html;
+
+  // 绑定 checkbox(不重载列表,只更新 DOM)
+  const checkAll = $('#userCheckAll');
+  if (checkAll) {
+    checkAll.onchange = (e) => {
+      const checked = e.target.checked;
+      users.forEach(u => {
+        if (checked) { getSelection().add(u.id); }
+        else         { getSelection().delete(u.id); }
+        syncRowCheckVisual(u.id, checked);
+      });
+      // 批量行高亮
+      $$('.row-check').forEach(cb => {
+        const row = cb.closest('tr');
+        if (row) row.classList.toggle('row-selected', checked);
+      });
+      renderBatchBar();
+    };
+  }
+  $$('.row-check').forEach(cb => {
+    cb.onchange = (e) => {
+      const id = parseInt(e.target.dataset.id);
+      toggleSelected(id);
+    };
+  });
+}
+
+window.toggleUserStatus = async (id, newStatus) => {
+  if (!confirmAction(newStatus ? '确定要启用该用户?' : '确定要禁用该用户?')) return;
+  try {
+    await api(`/users/${id}/status`, { method: 'PUT', body: JSON.stringify({ is_active: newStatus }) });
+    toast('已' + (newStatus ? '启用' : '禁用'));
+    loadUsers();
+  } catch (err) { toast(err.message, 'error'); }
+};
+window.toggleUserRole = async (id, newRole) => {
+  if (!confirmAction(`确定要${newRole === 'admin' ? '提升为管理员' : '降级为普通用户'}?`)) return;
+  try {
+    await api(`/users/${id}/role`, { method: 'PUT', body: JSON.stringify({ role: newRole }) });
+    toast('已' + (newRole === 'admin' ? '升级' : '降级'));
+    loadUsers();
+  } catch (err) { toast(err.message, 'error'); }
+};
+window.deleteUser = async (id, username) => {
+  if (!confirmAction(`确定要删除用户「${username}」? 该操作不可恢复!`)) return;
+  try {
+    await api(`/users/${id}`, { method: 'DELETE' });
+    toast('用户已删除');
+    loadUsers();
+  } catch (err) { toast(err.message, 'error'); }
+};
+
+// ============================
+// 图片管理
+// ============================
+async function renderImages(c) {
+  c.innerHTML = `
+    <div class="page-header">
+      <div><div class="page-title">图片管理</div><div class="page-subtitle">管理图片的可见性/新作品标签/排序 · 上传后自动压成 WebP</div></div>
+    </div>
+    <div class="toolbar">
+      <button class="btn" onclick="openUploadDialog()">+ 上传图片</button>
+      <span class="text-muted" style="font-size:12px;">支持 jpg / png / webp / heic · 单图 ≤ 10MB</span>
+      <span class="spacer"></span>
+    </div>
+    <div id="imageBatchBar"></div>
+    <div id="imageList" class="image-grid"><div class="loading"><span class="spinner"></span></div></div>
+  `;
+  const { data } = await api('/images');
+  if (!data.images.length) {
+    $('#imageList').innerHTML = '<div class="empty-state">暂无图片</div>';
+    return;
+  }
+  const selected = getSelection();
+  $('#imageList').innerHTML = data.images.map(img => {
+    // 区分状态:待审核 / 已隐藏 / 正常
+    const isPending = !img.is_visible && img.uploaded_by != null;
+    const isHidden  = !img.is_visible && img.uploaded_by == null;
+    const statusTag = isPending
+      ? '<span class="status-tag" style="background:rgba(251,191,36,0.9);color:#1a1d24;left:6px;right:auto;">待审核</span>'
+      : isHidden
+        ? '<span class="status-tag hidden">已隐藏</span>'
+        : '';
+    return `
+    <div class="image-card ${selected.has(img.id) ? 'row-selected' : ''}" style="${selected.has(img.id) ? 'outline:2px solid var(--accent);' : ''}">
+      <div class="thumb" style="background-image:url('${escapeHtml(img.src)}');">
+        <input type="checkbox" class="image-check" data-id="${img.id}" ${selected.has(img.id) ? 'checked' : ''} style="position:absolute;top:6px;left:6px;width:18px;height:18px;cursor:pointer;z-index:2;accent-color:var(--accent);">
+        ${statusTag}
+        ${img.is_new ? '<span class="status-tag new" style="right:6px;left:auto;">新</span>' : ''}
+      </div>
+      <div class="info">
+        <div class="name" title="${escapeHtml(img.filename)}">${escapeHtml(img.title || img.filename)}</div>
+        <div class="meta">
+          <span>♥ ${fmtNum(img.like_count)}</span>
+          <span>👁 ${fmtNum(img.view_count)}</span>
+          <span>序 ${img.sort_order}</span>
+          ${img.uploaded_by ? `<span class="text-muted" title="用户上传">👤</span>` : ''}
+        </div>
+      </div>
+      <div class="actions">
+        ${isPending
+          ? `<button class="btn btn-sm" style="background:var(--success);" onclick="approveImage(${img.id})">通过</button>`
+          : `<button class="btn btn-sm btn-secondary" onclick="toggleImageVisibility(${img.id}, ${!img.is_visible})">${img.is_visible ? '隐藏' : '显示'}</button>`
+        }
+        <button class="btn btn-sm btn-secondary" onclick="toggleImageNew(${img.id}, ${!img.is_new})">${img.is_new ? '取消新' : '标新'}</button>
+        <button class="btn btn-sm btn-secondary" onclick="editImageMeta(${img.id})">编辑</button>
+      </div>
+    </div>
+    `;
+  }).join('');
+  renderBatchBar();
+
+  // 绑定 checkbox(不重载列表,只更新 DOM)
+  $$('.image-check').forEach(cb => {
+    cb.onchange = (e) => {
+      const id = parseInt(e.target.dataset.id);
+      toggleSelected(id);
+    };
+  });
+}
+
+window.toggleImageVisibility = async (id, newVal) => {
+  try {
+    await api(`/images/${id}/visibility`, { method: 'PUT', body: JSON.stringify({ is_visible: newVal }) });
+    toast('已' + (newVal ? '显示' : '隐藏'));
+    loadPage('images');
+  } catch (err) { toast(err.message, 'error'); }
+};
+// 审核通过 (待审核 -> 显示)
+window.approveImage = async (id) => {
+  try {
+    await api(`/images/${id}/visibility`, { method: 'PUT', body: JSON.stringify({ is_visible: true }) });
+    toast('已通过审核,图片已上线');
+    loadPage('images');
+  } catch (err) { toast(err.message, 'error'); }
+};
+window.toggleImageNew = async (id, newVal) => {
+  try {
+    await api(`/images/${id}/meta`, { method: 'PUT', body: JSON.stringify({ is_new: newVal }) });
+    toast('已更新');
+    loadPage('images');
+  } catch (err) { toast(err.message, 'error'); }
+};
+window.editImageMeta = async (id) => {
+  const { data: img } = await api(`/images`);  // 简化:从列表中找
+  const target = img.images.find(i => i.id === id);
+  if (!target) return;
+  $('#modalContent').innerHTML = `
+    <div style="padding:18px 20px;border-bottom:1px solid var(--border);">
+      <h3 style="font-size:15px;">编辑图片 · ${escapeHtml(target.filename)}</h3>
+    </div>
+    <form id="imgForm" style="padding:18px 20px;">
+      <div class="form-group">
+        <label>标题</label>
+        <input type="text" name="title" value="${escapeHtml(target.title || '')}" maxlength="128">
+      </div>
+      <div class="form-group">
+        <label>分类</label>
+        <input type="text" name="category" value="${escapeHtml(target.category || '')}" maxlength="32">
+      </div>
+      <div class="form-group">
+        <label>排序</label>
+        <input type="number" name="sort_order" value="${target.sort_order}" min="0" max="999">
+      </div>
+      <div class="form-group">
+        <label>描述</label>
+        <textarea name="description" rows="3" style="width:100%;padding:9px 12px;background:var(--bg-3);border:1px solid var(--border);border-radius:6px;color:var(--text);">${escapeHtml(target.description || '')}</textarea>
+      </div>
+      <div class="row" style="margin-top:18px;justify-content:flex-end;">
+        <button type="button" class="btn btn-secondary" onclick="closeModal()">取消</button>
+        <button type="submit" class="btn">保存</button>
+      </div>
+    </form>
+  `;
+  $('#modal').classList.remove('hidden');
+  $('#imgForm').onsubmit = async (e) => {
+    e.preventDefault();
+    const f = e.target;
+    try {
+      await api(`/images/${id}/meta`, {
+        method: 'PUT',
+        body: JSON.stringify({
+          title: f.title.value.trim(),
+          category: f.category.value.trim(),
+          sort_order: parseInt(f.sort_order.value),
+          description: f.description.value,
+        }),
+      });
+      toast('已保存');
+      closeModal();
+      loadPage('images');
+    } catch (err) { toast(err.message, 'error'); }
+  };
+};
+window.closeModal = () => $('#modal').classList.add('hidden');
+
+// ============================
+// 图片上传(走 upload-image Edge Function)
+// ============================
+window.openUploadDialog = () => {
+  $('#modalContent').innerHTML = `
+    <div style="padding:18px 20px;border-bottom:1px solid var(--border);">
+      <h3 style="font-size:15px;">上传图片</h3>
+    </div>
+    <form id="uploadForm" style="padding:18px 20px;">
+      <div class="form-group">
+        <label>选择文件 *</label>
+        <input type="file" name="file" id="uploadFile" accept="image/*" required style="padding:9px;background:var(--bg-3);border:1px solid var(--border);border-radius:6px;width:100%;color:var(--text);">
+        <div class="text-muted" style="font-size:11px;margin-top:4px;">上传后会自动压缩为 WebP (长边 ≤ 1280px,质量 82)</div>
+      </div>
+      <div class="form-group">
+        <label>标题</label>
+        <input type="text" name="title" id="uploadTitle" maxlength="128" placeholder="留空则用文件名">
+      </div>
+      <div class="form-group">
+        <label>分类</label>
+        <input type="text" name="category" id="uploadCategory" maxlength="32" value="portrait">
+      </div>
+      <div class="form-group">
+        <label>排序</label>
+        <input type="number" name="sort_order" id="uploadSort" value="99" min="0" max="999">
+      </div>
+      <div class="form-group">
+        <label>描述</label>
+        <textarea name="description" id="uploadDesc" rows="2" maxlength="500" style="width:100%;padding:9px 12px;background:var(--bg-3);border:1px solid var(--border);border-radius:6px;color:var(--text);"></textarea>
+      </div>
+      <div class="form-group" style="display:flex;gap:14px;align-items:center;">
+        <label style="display:flex;gap:6px;align-items:center;margin:0;cursor:pointer;">
+          <input type="checkbox" name="is_new" id="uploadIsNew" checked> 标为"新作品"
+        </label>
+        <label style="display:flex;gap:6px;align-items:center;margin:0;cursor:pointer;">
+          <input type="checkbox" name="is_visible" id="uploadIsVisible" checked> 立即可见
+        </label>
+      </div>
+      <div id="uploadProgress" style="display:none;margin-top:14px;">
+        <div class="text-muted" style="font-size:12px;margin-bottom:6px;" id="uploadStatus">上传中…</div>
+        <div style="height:6px;background:var(--bg-3);border-radius:3px;overflow:hidden;">
+          <div id="uploadBar" style="height:100%;background:var(--accent);width:0%;transition:width 0.2s;"></div>
+        </div>
+      </div>
+      <div class="row" style="margin-top:18px;justify-content:flex-end;">
+        <button type="button" class="btn btn-secondary" onclick="closeModal()">取消</button>
+        <button type="submit" class="btn" id="uploadSubmitBtn">上传</button>
+      </div>
+    </form>
+  `;
+  $('#modal').classList.remove('hidden');
+
+  // 选中文件后,自动用文件名填标题
+  $('#uploadFile').onchange = (e) => {
+    const f = e.target.files[0];
+    if (!f) return;
+    const titleInput = $('#uploadTitle');
+    if (!titleInput.value) {
+      titleInput.value = f.name.replace(/\.[^.]+$/, '');
+    }
+  };
+
+  $('#uploadForm').onsubmit = async (e) => {
+    e.preventDefault();
+    const f = $('#uploadFile').files[0];
+    if (!f) return toast('请选择文件', 'error');
+    if (f.size > 10 * 1024 * 1024) return toast('文件超过 10MB', 'error');
+
+    const fd = new FormData();
+    fd.append('file', f);
+    fd.append('title', $('#uploadTitle').value.trim());
+    fd.append('category', $('#uploadCategory').value.trim() || 'portrait');
+    fd.append('sort_order', $('#uploadSort').value || '99');
+    fd.append('description', $('#uploadDesc').value || '');
+    fd.append('is_new', $('#uploadIsNew').checked ? 'true' : 'false');
+    fd.append('is_visible', $('#uploadIsVisible').checked ? 'true' : 'false');
+
+    const submitBtn = $('#uploadSubmitBtn');
+    submitBtn.disabled = true;
+    submitBtn.textContent = '上传中…';
+    $('#uploadProgress').style.display = 'block';
+
+    // 用 XHR 才能监听 progress,fetch 没法
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', UPLOAD_API);
+    xhr.setRequestHeader('apikey', ANON_KEY);
+    xhr.setRequestHeader('Authorization', 'Bearer ' + State.token);
+    xhr.upload.onprogress = (e) => {
+      if (e.lengthComputable) {
+        const pct = Math.round((e.loaded / e.total) * 100);
+        $('#uploadBar').style.width = pct + '%';
+        $('#uploadStatus').textContent = `上传中… ${pct}%`;
+      }
+    };
+    xhr.onload = () => {
+      submitBtn.disabled = false;
+      submitBtn.textContent = '上传';
+      let res;
+      try { res = JSON.parse(xhr.responseText); }
+      catch { res = { error: xhr.responseText || ('HTTP ' + xhr.status) }; }
+      if (xhr.status >= 200 && xhr.status < 300 && res.success) {
+        toast(`上传成功!${res.data.width}×${res.data.height} · ${(res.data.size_bytes/1024).toFixed(1)}KB`);
+        closeModal();
+        loadPage('images');
+      } else {
+        toast(res.error || ('HTTP ' + xhr.status), 'error');
+        $('#uploadStatus').textContent = '失败: ' + (res.error || '');
+        $('#uploadBar').style.background = 'var(--danger)';
+      }
+    };
+    xhr.onerror = (e) => {
+      submitBtn.disabled = false;
+      submitBtn.textContent = '上传';
+      const hint = location.protocol === 'file:'
+        ? '提示:file:// 协议下浏览器禁止跨源请求,请用 http://localhost 打开 admin.html'
+        : '请检查网络或 Supabase 配置';
+      toast(`网络错误 · ${hint}`, 'error');
+      $('#uploadStatus').textContent = '网络错误 · ' + hint;
+      $('#uploadBar').style.background = 'var(--danger)';
+      console.error('upload-image xhr error:', e);
+    };
+    xhr.send(fd);
+  };
+};
+
+// ============================
+// 评论管理
+// ============================
+async function renderComments(c) {
+  c.innerHTML = `
+    <div class="page-header">
+      <div><div class="page-title">评论管理</div><div class="page-subtitle">查看/删除评论</div></div>
+    </div>
+    <div id="commentBatchBar"></div>
+    <div class="toolbar">
+      <input type="text" id="commentSearch" placeholder="搜索评论内容" style="min-width:200px;">
+      <select id="commentStatusFilter">
+        <option value="">所有状态</option>
+        <option value="approved">已通过</option>
+        <option value="pending">待审核</option>
+        <option value="rejected">已拒绝</option>
+      </select>
+      <button class="btn btn-sm" id="commentSearchBtn">搜索</button>
+    </div>
+    <div id="commentList" class="table-wrap"><div class="loading"><span class="spinner"></span></div></div>
+  `;
+  $('#commentSearchBtn').onclick = () => loadComments();
+  $('#commentSearch').onkeydown = e => { if (e.key === 'Enter') loadComments(); };
+  if (!State.pageState.comments) State.pageState.comments = { page: 1, pageSize: 20, search: '', status: '' };
+  await loadComments();
+}
+
+async function loadComments() {
+  const s = State.pageState.comments;
+  s.search = $('#commentSearch').value.trim();
+  s.status = $('#commentStatusFilter').value;
+  const params = new URLSearchParams({ page: s.page, pageSize: s.pageSize, search: s.search, status: s.status });
+  const { data } = await api('/comments?' + params);
+  renderCommentTable(data);
+}
+
+function renderCommentTable({ comments, total, page, pageSize }) {
+  renderBatchBar();
+  const list = $('#commentList');
+  if (!list) return; // 切页/重渲染期间容器已消失,直接放弃
+  if (!comments.length) {
+    list.innerHTML = '<div class="empty-state">暂无评论</div>';
+    return;
+  }
+  const selected = getSelection();
+  const allSelected = comments.length > 0 && comments.every(c => selected.has(c.id));
+  const html = `
+    <table>
+      <thead><tr>
+        <th class="check-col"><input type="checkbox" class="all-check" id="commentCheckAll" ${allSelected ? 'checked' : ''}></th>
+        <th>作者</th><th>内容</th><th>来源</th><th>状态</th>
+        <th>图片</th><th>时间</th><th>操作</th>
+      </tr></thead>
+      <tbody>${comments.map(c => `
+        <tr class="${selected.has(c.id) ? 'row-selected' : ''}">
+          <td class="check-col"><input type="checkbox" class="row-check" data-id="${c.id}" ${selected.has(c.id) ? 'checked' : ''}></td>
+          <td>
+            <div>${escapeHtml(c.github_username || '匿名')}</div>
+            ${c.user ? `<div class="text-muted" style="font-size:11px;">@${escapeHtml(c.user.username)}</div>` : ''}
+          </td>
+          <td style="max-width:340px;white-space:normal;">
+            <div style="display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;">${escapeHtml(c.content)}</div>
+          </td>
+          <td>${escapeHtml(c.source || '—')}</td>
+          <td><span class="badge badge-${c.status === 'approved' ? 'approved' : c.status === 'pending' ? 'pending' : 'rejected'}">${c.status}</span></td>
+          <td>${c.image_id || '—'}</td>
+          <td>${fmtRelative(c.created_at)}</td>
+          <td>
+            <button class="btn btn-sm btn-danger" onclick="deleteComment(${c.id})">删除</button>
+          </td>
+        </tr>
+      `).join('')}</tbody>
+    </table>
+    ${renderPagination(total, page, pageSize, 'State.pageState.comments.page = $1; loadComments();')}
+  `;
+  list.innerHTML = html;
+
+  // 绑定 checkbox(不重载列表,只更新 DOM)
+  const checkAll = $('#commentCheckAll');
+  if (checkAll) {
+    checkAll.onchange = (e) => {
+      const checked = e.target.checked;
+      comments.forEach(c => {
+        if (checked) { getSelection().add(c.id); }
+        else         { getSelection().delete(c.id); }
+        syncRowCheckVisual(c.id, checked);
+      });
+      $$('.row-check').forEach(cb => {
+        const row = cb.closest('tr');
+        if (row) row.classList.toggle('row-selected', checked);
+      });
+      renderBatchBar();
+    };
+  }
+  $$('.row-check').forEach(cb => {
+    cb.onchange = (e) => {
+      const id = parseInt(e.target.dataset.id);
+      toggleSelected(id);
+    };
+  });
+}
+
+window.deleteComment = async (id) => {
+  if (!confirmAction('确定要删除该评论?')) return;
+  try {
+    await api(`/comments/${id}`, { method: 'DELETE' });
+    toast('评论已删除');
+    loadComments();
+  } catch (err) { toast(err.message, 'error'); }
+};
+
+// ============================
+// 批量操作(用户/图片/评论)
+// ============================
+function renderBatchBar() {
+  const page = State.currentPage;
+  const barId = page === 'users' ? 'userBatchBar'
+              : page === 'images' ? 'imageBatchBar'
+              : page === 'comments' ? 'commentBatchBar'
+              : null;
+  if (!barId) return;
+  const el = document.getElementById(barId);
+  if (!el) return;
+  const count = getSelection().size;
+  if (count === 0) { el.innerHTML = ''; return; }
+
+  let actions = '';
+  if (page === 'users') {
+    actions = `
+      <button class="btn btn-sm" onclick="batchUsers('enable')">批量启用</button>
+      <button class="btn btn-sm btn-secondary" onclick="batchUsers('disable')">批量禁用</button>
+      <select id="batchUserRoleSel" style="padding:5px 9px;background:var(--bg-3);border:1px solid var(--border);border-radius:5px;color:var(--text);font-size:12px;">
+        <option value="">批量改角色…</option>
+        <option value="user">→ 普通用户</option>
+        <option value="admin">→ 管理员</option>
+      </select>
+      <button class="btn btn-sm btn-secondary" onclick="batchUsers('apply_role')">应用</button>
+      <button class="btn btn-sm btn-danger" onclick="batchUsers('delete')">批量删除</button>
+    `;
+  } else if (page === 'images') {
+    actions = `
+      <button class="btn btn-sm" style="background:var(--success);" onclick="batchImages('approve')">批量通过审核</button>
+      <button class="btn btn-sm" onclick="batchImages('show')">批量显示</button>
+      <button class="btn btn-sm btn-secondary" onclick="batchImages('hide')">批量隐藏</button>
+      <button class="btn btn-sm" onclick="batchImages('set_new')">标记为新作品</button>
+      <button class="btn btn-sm btn-secondary" onclick="batchImages('unset_new')">取消新作品</button>
+    `;
+  } else if (page === 'comments') {
+    actions = `
+      <button class="btn btn-sm" onclick="batchComments('approve')">批量通过</button>
+      <button class="btn btn-sm btn-secondary" onclick="batchComments('reject')">批量拒绝</button>
+      <button class="btn btn-sm btn-danger" onclick="batchComments('delete')">批量删除</button>
+    `;
+  }
+
+  el.innerHTML = `
+    <div class="batch-bar">
+      <span class="selected-info">已选 <b>${count}</b> 项</span>
+      <div class="divider"></div>
+      ${actions}
+      <span class="spacer" style="flex:1;"></span>
+      <button class="btn btn-sm btn-secondary" onclick="clearSelection();refreshCurrent();">取消选择</button>
+    </div>
+  `;
+}
+window.refreshCurrent = () => {
+  const p = State.currentPage;
+  if (p === 'users') loadUsers();
+  else if (p === 'images') loadPage('images');
+  else if (p === 'comments') loadComments();
+};
+
+// ---- 用户批量 ----
+window.batchUsers = async (action) => {
+  const ids = Array.from(getSelection());
+  if (!ids.length) return toast('请先勾选用户', 'error');
+  if (action === 'apply_role') {
+    const sel = document.getElementById('batchUserRoleSel');
+    const role = sel ? sel.value : '';
+    if (!role) return toast('请选择目标角色', 'error');
+    if (!confirmAction(`确定要将 ${ids.length} 个用户批量改为「${role === 'admin' ? '管理员' : '普通用户'}」?`)) return;
+    return await runBatch('users', { action: 'set_role_' + role });
+  }
+  const text = { enable: '启用', disable: '禁用', delete: '删除' }[action];
+  if (action === 'delete' && !confirmAction(`确定要批量${text} ${ids.length} 个用户? 该操作不可恢复!`)) return;
+  if (action !== 'delete' && !confirmAction(`确定要批量${text} ${ids.length} 个用户?`)) return;
+  return await runBatch('users', { action });
+};
+
+// ---- 图片批量 ----
+window.batchImages = async (action) => {
+  const ids = Array.from(getSelection());
+  if (!ids.length) return toast('请先勾选图片', 'error');
+  // approve 映射到后端 show 动作 (通过审核 = 设为可见)
+  const text = { show: '显示', hide: '隐藏', set_new: '标为新作品', unset_new: '取消新作品', approve: '通过审核' }[action];
+  const backendAction = action === 'approve' ? 'show' : action;
+  if (!confirmAction(`确定要批量${text} ${ids.length} 张图片?`)) return;
+  return await runBatch('images', { action: backendAction });
+};
+
+// ---- 评论批量 ----
+window.batchComments = async (action) => {
+  const ids = Array.from(getSelection());
+  if (!ids.length) return toast('请先勾选评论', 'error');
+  const text = { delete: '删除', approve: '通过', reject: '拒绝' }[action];
+  if (action === 'delete' && !confirmAction(`确定要批量${text} ${ids.length} 条评论? 该操作不可恢复!`)) return;
+  if (action !== 'delete' && !confirmAction(`确定要批量${text} ${ids.length} 条评论?`)) return;
+  return await runBatch('comments', { action });
+};
+
+async function runBatch(section, payload) {
+  const ids = Array.from(getSelection());
+  try {
+    const { data } = await api(`/${section}/batch`, { method: 'POST', body: JSON.stringify({ ids, ...payload }) });
+    toast(`操作完成,影响 ${data.affected} 项`);
+    clearSelection();
+    refreshCurrent();
+  } catch (err) { toast(err.message, 'error'); }
+}
+
+// ============================
+// 审计日志
+// ============================
+async function renderAudit(c) {
+  c.innerHTML = `
+    <div class="page-header">
+      <div><div class="page-title">审计日志</div><div class="page-subtitle">所有管理员操作记录</div></div>
+    </div>
+    <div class="toolbar">
+      <select id="auditActionFilter">
+        <option value="">所有操作</option>
+        <option value="users.enable">用户启用</option>
+        <option value="users.disable">用户禁用</option>
+        <option value="users.promote">用户升级</option>
+        <option value="users.demote">用户降级</option>
+        <option value="users.delete">用户删除</option>
+        <option value="users.batch_">用户批量 (users.batch_*)</option>
+        <option value="comments.delete">评论删除</option>
+        <option value="comments.batch_">评论批量 (comments.batch_*)</option>
+        <option value="images.show">图片显示</option>
+        <option value="images.hide">图片隐藏</option>
+        <option value="images.update">图片更新</option>
+        <option value="images.batch_">图片批量 (images.batch_*)</option>
+      </select>
+      <button class="btn btn-sm" id="auditFilterBtn">筛选</button>
+    </div>
+    <div id="auditList" class="table-wrap"><div class="loading"><span class="spinner"></span></div></div>
+  `;
+  $('#auditFilterBtn').onclick = () => loadAudit();
+  if (!State.pageState.audit) State.pageState.audit = { page: 1, pageSize: 30, action: '' };
+  await loadAudit();
+}
+
+async function loadAudit() {
+  const s = State.pageState.audit;
+  s.action = $('#auditActionFilter').value;
+  const params = new URLSearchParams({ page: s.page, pageSize: s.pageSize, action: s.action });
+  const { data } = await api('/audit-logs?' + params);
+  if (!data.logs.length) {
+    $('#auditList').innerHTML = '<div class="empty-state">暂无日志</div>';
+    return;
+  }
+  const html = `
+    <table>
+      <thead><tr>
+        <th>时间</th><th>管理员</th><th>操作</th><th>目标</th><th>详情</th><th>IP</th>
+      </tr></thead>
+      <tbody>${data.logs.map(l => `
+        <tr>
+          <td>${fmtDate(l.created_at)}</td>
+          <td>${escapeHtml(l.admin_name || '—')}</td>
+          <td><code>${escapeHtml(l.action)}</code></td>
+          <td><span class="badge badge-user">${escapeHtml(l.target_type)} #${escapeHtml(l.target_id)}</span></td>
+          <td style="max-width:300px;font-size:12px;color:var(--text-2);">${escapeHtml(JSON.stringify(l.details || {}))}</td>
+          <td><code style="font-size:11px;">${escapeHtml(l.ip || '—')}</code></td>
+        </tr>
+      `).join('')}</tbody>
+    </table>
+    ${renderPagination(data.total, data.page, data.pageSize, 'State.pageState.audit.page = $1; loadAudit();')}
+  `;
+  $('#auditList').innerHTML = html;
+}
+
+// ============================
+// 分页组件
+// ============================
+function renderPagination(total, page, pageSize, onPageClick) {
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const start = (page - 1) * pageSize + 1;
+  const end = Math.min(total, page * pageSize);
+  const pages = [];
+  const max = 5;
+  let from = Math.max(1, page - 2);
+  let to = Math.min(totalPages, from + max - 1);
+  from = Math.max(1, to - max + 1);
+  for (let i = from; i <= to; i++) pages.push(i);
+
+  return `
+    <div class="pagination">
+      <span>显示 ${start}-${end} / 共 ${fmtNum(total)} 条</span>
+      <div class="pages">
+        <button ${page <= 1 ? 'disabled' : ''} onclick="${onPageClick.replace('$1', page - 1)}">上一页</button>
+        ${pages.map(p => `<button class="${p === page ? 'active' : ''}" onclick="${onPageClick.replace('$1', p)}">${p}</button>`).join('')}
+        <button ${page >= totalPages ? 'disabled' : ''} onclick="${onPageClick.replace('$1', page + 1)}">下一页</button>
+      </div>
+    </div>
+  `;
+}
+
+// ============================
+// 启动
+// ============================
+if (loadAuth()) {
+  showMainView(State.user);
+} else {
+  $('#loginView').classList.remove('hidden');
+}
+</script>
+</body>
+</html>

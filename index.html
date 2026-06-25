@@ -1064,6 +1064,7 @@
        用户认证 UI
        ============================ */
     .auth-area { display: flex; align-items: center; gap: 6px; }
+    .auth-area[hidden], .user-menu[hidden] { display: none !important; }
     .auth-btn {
       padding: 7px 14px; border-radius: 6px; cursor: pointer; font-size: 13px;
       font-family: inherit; transition: all .18s ease; white-space: nowrap;
@@ -1281,6 +1282,7 @@
             <span class="user-name" id="userMenuName">用户</span>
             <span class="user-role" id="userMenuRole">user</span>
           </div>
+          <button type="button" class="user-menu-item" id="userMenuUpload">📷 上传作品</button>
           <button type="button" class="user-menu-item" id="userMenuProfile">个人资料</button>
           <button type="button" class="user-menu-item" id="userMenuChangePwd">修改密码</button>
           <button type="button" class="user-menu-item user-menu-item-danger" id="userMenuLogout">退出登录</button>
@@ -1564,6 +1566,55 @@
       { id: 15, src: 'images/122d3967ac65825bd54b528e53d5b805.jpg', title: '人像作品 15', category: 'portrait', date: '', location: '', isNew: false, views: 0, likes: 0 },
     ];
 
+    // 异步从 Supabase Storage 拉取新上传的图片,合并到列表中
+    // 老图(15 张)继续从本地 images/ 读,新图从 public-gallery 读
+    (async () => {
+      const SUPA_URL = (window.SUPABASE_CONFIG && window.SUPABASE_CONFIG.url)
+        || 'qlhfyawbyedhqokivezn.supabase.co';
+      try {
+        const r = await fetch(`https://${SUPA_URL}/functions/v1/public-gallery/images`, {
+          method: 'GET',
+          headers: { 'apikey': (window.SUPABASE_CONFIG && window.SUPABASE_CONFIG.anonKey) || '' },
+        });
+        if (!r.ok) return; // 静默失败,不影响老图显示
+        const j = await r.json();
+        if (!j.success || !j.data || !Array.isArray(j.data.images)) return;
+
+        // 合并: 跳过与老图 src 重复的;按 sort_order 插入
+        const oldSrcs = new Set(imageData.map(img => img.src));
+        const newOnes = j.data.images
+          .filter(n => !oldSrcs.has(n.src))
+          .map(n => ({
+            id: n.id,
+            src: n.src,
+            title: n.title || n.filename,
+            category: n.category || 'portrait',
+            date: '',
+            location: '',
+            isNew: !!n.is_new,
+            views: 0, likes: 0,
+            storagePath: n.storage_path || null,   // 标记为新图
+          }));
+        if (newOnes.length === 0) return;
+
+        // 按 sort_order 升序插入
+        for (const n of newOnes) {
+          const insertAt = imageData.findIndex(x => (x.sort_order || 999) > (n.sort_order || 999));
+          if (insertAt < 0) imageData.push(n);
+          else imageData.splice(insertAt, 0, n);
+        }
+        // 触发重渲染(用延时确保 DOMContentLoaded 已结束)
+        if (typeof window.rebuildGallery === 'function') {
+          window.rebuildGallery();
+        } else {
+          // 模拟一次点击 "all" filter 强制重渲染
+          document.querySelector('.filter-btn.active')?.click();
+        }
+      } catch (e) {
+        console.warn('拉取新图失败(file:// 模式下会失败,属正常):', e.message);
+      }
+    })();
+
     // CDN URL 优化函数（为 Unsplash 图片添加 CDN 参数）
     function getOptimizedImageUrl(src, width = 800) {
       if (src.includes('unsplash.com')) {
@@ -1639,6 +1690,12 @@
       filteredImages = filter === 'all' ? [...imageData] : imageData.filter(img => img.category === filter);
       applySortingAndRender();
     }
+
+    // 暴露给异步合并逻辑:新图加载完后调用
+    window.rebuildGallery = function() {
+      filteredImages = currentFilter === 'all' ? [...imageData] : imageData.filter(img => img.category === currentFilter);
+      applySortingAndRender();
+    };
 
     function applySortingAndRender() {
       sortedImages = sortImages(filteredImages, currentSort);
@@ -3706,6 +3763,175 @@
     } else {
       init();
     }
+  })();
+  </script>
+
+  <!-- 用户上传图片模态框 -->
+  <div id="uploadModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);backdrop-filter:blur(4px);z-index:10000;align-items:center;justify-content:center;">
+    <div style="background:var(--color-bg,#1a1d24);border-radius:12px;width:min(480px,92vw);max-height:90vh;overflow-y:auto;color:#e6e8ed;box-shadow:0 24px 60px rgba(0,0,0,0.5);">
+      <div style="padding:18px 20px;border-bottom:1px solid #2d3340;display:flex;justify-content:space-between;align-items:center;">
+        <h3 style="font-size:16px;margin:0;">📷 上传作品</h3>
+        <button id="uploadCloseBtn" style="background:none;border:none;color:#9ba1ad;font-size:22px;cursor:pointer;line-height:1;">×</button>
+      </div>
+      <form id="userUploadForm" style="padding:18px 20px;display:flex;flex-direction:column;gap:14px;">
+        <div>
+          <label style="display:block;font-size:12px;color:#9ba1ad;margin-bottom:6px;">选择文件 *</label>
+          <input type="file" id="userUploadFile" accept="image/*" required style="width:100%;padding:10px;background:#232830;border:1px solid #2d3340;border-radius:6px;color:#e6e8ed;font-size:13px;">
+          <div style="font-size:11px;color:#6b7280;margin-top:4px;">支持 jpg/png/webp,单图 ≤ 10MB,上传后自动压缩为 WebP</div>
+        </div>
+        <div>
+          <label style="display:block;font-size:12px;color:#9ba1ad;margin-bottom:6px;">标题</label>
+          <input type="text" id="userUploadTitle" maxlength="128" placeholder="给作品起个名字" style="width:100%;padding:9px 12px;background:#232830;border:1px solid #2d3340;border-radius:6px;color:#e6e8ed;font-size:13px;">
+        </div>
+        <div>
+          <label style="display:block;font-size:12px;color:#9ba1ad;margin-bottom:6px;">分类</label>
+          <select id="userUploadCategory" style="width:100%;padding:9px 12px;background:#232830;border:1px solid #2d3340;border-radius:6px;color:#e6e8ed;font-size:13px;">
+            <option value="portrait">人像</option>
+            <option value="landscape">风景</option>
+            <option value="street">街拍</option>
+            <option value="other">其他</option>
+          </select>
+        </div>
+        <div>
+          <label style="display:block;font-size:12px;color:#9ba1ad;margin-bottom:6px;">描述(可选)</label>
+          <textarea id="userUploadDesc" rows="2" maxlength="500" placeholder="说说这张图的故事..." style="width:100%;padding:9px 12px;background:#232830;border:1px solid #2d3340;border-radius:6px;color:#e6e8ed;font-size:13px;resize:vertical;"></textarea>
+        </div>
+        <div style="background:rgba(96,165,250,0.1);border:1px solid rgba(96,165,250,0.3);border-radius:6px;padding:10px 12px;font-size:12px;color:#60a5fa;">
+          ℹ️ 上传后需管理员审核通过后才会在画廊显示,审核通常在 24 小时内完成。
+        </div>
+        <div id="uploadProgress2" style="display:none;">
+          <div style="font-size:12px;color:#9ba1ad;margin-bottom:6px;" id="uploadStatus2">上传中…</div>
+          <div style="height:6px;background:#232830;border-radius:3px;overflow:hidden;">
+            <div id="uploadBar2" style="height:100%;background:#4f8eff;width:0%;transition:width 0.2s;"></div>
+          </div>
+        </div>
+        <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:6px;">
+          <button type="button" id="userUploadCancelBtn" style="padding:9px 18px;background:#232830;color:#e6e8ed;border:1px solid #2d3340;border-radius:6px;cursor:pointer;font-size:14px;">取消</button>
+          <button type="submit" id="userUploadSubmitBtn" style="padding:9px 22px;background:#4f8eff;color:white;border:none;border-radius:6px;cursor:pointer;font-size:14px;">上传</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script>
+  // 用户上传图片逻辑
+  (function() {
+    const modal = document.getElementById('uploadModal');
+    if (!modal) return;
+    const closeBtn = document.getElementById('uploadCloseBtn');
+    const cancelBtn = document.getElementById('userUploadCancelBtn');
+    const form = document.getElementById('userUploadForm');
+    const fileInput = document.getElementById('userUploadFile');
+    const titleInput = document.getElementById('userUploadTitle');
+    const submitBtn = document.getElementById('userUploadSubmitBtn');
+
+    // 从 window.SUPABASE_CONFIG 拿配置
+    function getConfig() {
+      const cfg = window.SUPABASE_CONFIG || {};
+      return {
+        url: cfg.url || 'qlhfyawbyedhqokivezn.supabase.co',
+        anonKey: cfg.anonKey || '',
+      };
+    }
+    // 从 localStorage 拿 token (与主站 auth 模块约定一致)
+    function getToken() {
+      return localStorage.getItem('shungxin_auth_token') || '';
+    }
+    function openModal() {
+      const token = getToken();
+      if (!token) {
+        alert('请先登录后再上传作品');
+        return;
+      }
+      modal.style.display = 'flex';
+      // 重置表单
+      form.reset();
+      document.getElementById('uploadProgress2').style.display = 'none';
+      document.getElementById('uploadBar2').style.width = '0%';
+      document.getElementById('uploadBar2').style.background = '#4f8eff';
+      document.getElementById('uploadStatus2').textContent = '上传中…';
+      submitBtn.disabled = false;
+      submitBtn.textContent = '上传';
+    }
+    function closeModal() {
+      modal.style.display = 'none';
+    }
+    // 选中文件后自动填标题
+    fileInput.addEventListener('change', (e) => {
+      const f = e.target.files[0];
+      if (!f) return;
+      if (!titleInput.value) titleInput.value = f.name.replace(/\.[^.]+$/, '');
+    });
+    closeBtn.addEventListener('click', closeModal);
+    cancelBtn.addEventListener('click', closeModal);
+    modal.addEventListener('click', (e) => { if (e.target === modal) closeModal(); });
+    // 绑定菜单项
+    const menuBtn = document.getElementById('userMenuUpload');
+    if (menuBtn) menuBtn.addEventListener('click', openModal);
+
+    // 表单提交
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const f = fileInput.files[0];
+      if (!f) return alert('请选择文件');
+      if (f.size > 10 * 1024 * 1024) return alert('文件超过 10MB');
+
+      const fd = new FormData();
+      fd.append('file', f);
+      fd.append('title', titleInput.value.trim());
+      fd.append('category', document.getElementById('userUploadCategory').value);
+      fd.append('description', document.getElementById('userUploadDesc').value || '');
+      fd.append('is_new', 'false');
+      fd.append('is_visible', 'false');   // 用户上传默认待审核
+
+      submitBtn.disabled = true;
+      submitBtn.textContent = '上传中…';
+      document.getElementById('uploadProgress2').style.display = 'block';
+
+      const { url, anonKey } = getConfig();
+      const token = getToken();
+      const xhr = new XMLHttpRequest();
+      xhr.open('POST', `https://${url}/functions/v1/upload-image`);
+      xhr.setRequestHeader('apikey', anonKey);
+      xhr.setRequestHeader('Authorization', 'Bearer ' + token);
+      xhr.upload.onprogress = (ev) => {
+        if (ev.lengthComputable) {
+          const pct = Math.round((ev.loaded / ev.total) * 100);
+          document.getElementById('uploadBar2').style.width = pct + '%';
+          document.getElementById('uploadStatus2').textContent = `上传中… ${pct}%`;
+        }
+      };
+      xhr.onload = () => {
+        submitBtn.disabled = false;
+        submitBtn.textContent = '上传';
+        let res;
+        try { res = JSON.parse(xhr.responseText); }
+        catch { res = { error: xhr.responseText || ('HTTP ' + xhr.status) }; }
+        if (xhr.status >= 200 && xhr.status < 300 && res.success) {
+          document.getElementById('uploadStatus2').textContent = '✅ 上传成功!等待审核';
+          document.getElementById('uploadBar2').style.width = '100%';
+          document.getElementById('uploadBar2').style.background = '#34d399';
+          setTimeout(() => {
+            closeModal();
+            // 如果主站有 toast 系统,触发一下;否则用 alert
+            if (window.sxToast) window.sxToast('作品已上传,等待管理员审核', 'success');
+          }, 1500);
+        } else {
+          document.getElementById('uploadStatus2').textContent = '❌ ' + (res.error || ('HTTP ' + xhr.status));
+          document.getElementById('uploadBar2').style.background = '#f87171';
+        }
+      };
+      xhr.onerror = () => {
+        submitBtn.disabled = false;
+        submitBtn.textContent = '上传';
+        const hint = location.protocol === 'file:'
+          ? 'file:// 协议下无法上传,请通过 http:// 访问网站'
+          : '网络错误,请检查网络后重试';
+        document.getElementById('uploadStatus2').textContent = '❌ ' + hint;
+        document.getElementById('uploadBar2').style.background = '#f87171';
+      };
+      xhr.send(fd);
+    });
   })();
   </script>
 </body>
