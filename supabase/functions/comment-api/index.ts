@@ -134,7 +134,7 @@ async function handleCreateComment(req) {
     github_avatar: github_avatar || null,
     rating: rating && rating >= 1 && rating <= 5 ? rating : null,
     parent_id: parent_id || null,
-    status: 'approved', source: 'website',
+    status: 'approved', source: 'local',
     created_at: new Date().toISOString(),
   }).select().single();
 
