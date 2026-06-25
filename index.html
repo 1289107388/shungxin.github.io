@@ -1189,7 +1189,7 @@
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>分享
       </button>
       <button class="btn-ghost comment-btn" id="lightboxComment" title="查看/发表评论">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>评论<span class="comment-count-inline" id="lightboxCommentCount">0</span>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>评论<span class="comment-count-inline" id="lightboxCommentCount">…</span>
       </button>
       <button class="btn-ghost" id="lightboxZoomIn" title="放大">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></svg>放大
@@ -1342,6 +1342,11 @@
     let longpressTargetImg = null;
     let likeCountsData = {};
     let viewCountsData = {};
+    // 全局缓存：每张图片的评论总数（key 为 imageId）
+    // 暴露到 window 以便跨 IIFE 访问（评论系统 IIFE 需读写此缓存）
+    window.commentCountsData = window.commentCountsData || {};
+    // lightbox 当前显示的图片 ID
+    window.currentLightboxImageId = window.currentLightboxImageId || null;
 
     function getCategoryLabel(cat) {
       const labels = { landscape: '风景', urban: '城市', portrait: '人像', nature: '自然' };
@@ -1785,6 +1790,7 @@
     function openLightbox(index) {
       currentLightboxIndex = index;
       const img = sortedImages[index];
+      window.currentLightboxImageId = img.id;
       lightboxImg.src = img.src;
       lightbox.classList.remove('hidden');
       document.body.style.overflow = 'hidden';
@@ -1797,6 +1803,11 @@
         incrementViewCount(img.id);
       }
 
+      // 刷新 lightbox 工具栏的评论数（使用缓存或拉取）
+      if (typeof refreshLightboxCommentCount === 'function') {
+        refreshLightboxCommentCount(img.id);
+      }
+
       // Show zoom hint after a moment
       setTimeout(() => { lightboxZoomHint.classList.add('show'); }, 500);
       setTimeout(() => { lightboxZoomHint.classList.remove('show'); }, 4000);
@@ -1806,6 +1817,7 @@
       lightbox.classList.add('hidden');
       document.body.style.overflow = '';
       currentLightboxIndex = -1;
+      window.currentLightboxImageId = null;
       resetZoom();
     }
 
@@ -1819,10 +1831,17 @@
       setTimeout(() => {
         currentLightboxIndex = newIndex;
         const img = sortedImages[newIndex];
+        window.currentLightboxImageId = img.id;
         lightboxImg.src = img.src;
         lightboxImg.style.opacity = '1';
         if (newIndex + 1 < sortedImages.length) new Image().src = sortedImages[newIndex + 1].src;
         if (newIndex - 1 >= 0) new Image().src = sortedImages[newIndex - 1].src;
+
+        // 切换图片后刷新 lightbox 工具栏的评论数
+        if (typeof refreshLightboxCommentCount === 'function') {
+          refreshLightboxCommentCount(img.id);
+        }
+
         setTimeout(() => { lightboxZoomHint.classList.add('show'); }, 500);
         setTimeout(() => { lightboxZoomHint.classList.remove('show'); }, 3500);
       }, 150);
@@ -2260,6 +2279,60 @@
         window.open(url, '_blank', 'noopener,noreferrer');
       });
 
+      // === Lightbox 工具栏评论数同步 ===
+      // 直接更新 DOM 元素（不做网络请求）
+      function updateLightboxCommentCount(count) {
+        const el = document.getElementById('lightboxCommentCount');
+        if (el) {
+          const safe = (typeof count === 'number' && !isNaN(count) && count >= 0) ? count : 0;
+          el.textContent = safe > 99 ? '99+' : safe;
+        }
+      }
+
+      // 拉取并刷新 lightbox 工具栏的评论数：优先使用缓存
+      async function refreshLightboxCommentCount(imageId) {
+        if (!imageId) { updateLightboxCommentCount(0); return; }
+
+        // 1) 命中缓存
+        if (window.commentCountsData &&
+            Object.prototype.hasOwnProperty.call(window.commentCountsData, imageId)) {
+          updateLightboxCommentCount(window.commentCountsData[imageId]);
+        }
+
+        // 2) 拉取最新数据（异步），不阻塞 UI
+        try {
+          if (!window.SUPABASE_CONFIG || !window.SUPABASE_CONFIG.url) return;
+          const resp = await fetch(
+            window.SUPABASE_CONFIG.url + '/functions/v1/comment-api/list?image_id=' + imageId + '&page=1&limit=1&sort=newest',
+            {
+              headers: {
+                'apikey': window.SUPABASE_CONFIG.anonKey,
+                'Authorization': 'Bearer ' + window.SUPABASE_CONFIG.anonKey
+              }
+            }
+          );
+          if (!resp.ok) throw new Error('HTTP ' + resp.status);
+          const data = await resp.json();
+          const total = (data.pagination && typeof data.pagination.total === 'number')
+            ? data.pagination.total
+            : 0;
+          if (window.commentCountsData) {
+            window.commentCountsData[imageId] = total;
+          }
+          // 仅在 lightbox 仍展示同一张图时才更新，避免快速翻页造成的闪烁
+          if (window.currentLightboxImageId === imageId) {
+            updateLightboxCommentCount(total);
+          }
+        } catch (e) {
+          console.warn('刷新 lightbox 评论数失败:', e.message);
+          // 失败时不要覆盖显示 0，避免把已有评论的图片误显示为 0
+        }
+      }
+
+      // 暴露到 window，供其他 IIFE 内的代码调用
+      window.updateLightboxCommentCount = updateLightboxCommentCount;
+      window.refreshLightboxCommentCount = refreshLightboxCommentCount;
+
       // === 自建评论系统：从 Supabase 加载 ===
       let currentCommentsPage = 1;
       let currentCommentsSort = 'newest';
@@ -2269,9 +2342,9 @@
         currentImageId = imageId;
         currentCommentsPage = page;
         currentCommentsSort = sort;
-        
+
         body.innerHTML = '<div class="comments-loading"><div class="comments-loading-spinner"></div>正在加载评论…</div>';
-        
+
         try {
           // 调用 Edge Function 获取评论列表
           const resp = await fetch(
@@ -2286,11 +2359,35 @@
           if (!resp.ok) throw new Error('HTTP ' + resp.status);
           const data = await resp.json();
 
+          // ✅ 使用 pagination.total 作为评论总数（之前错误使用了 data.data.length 当前页数）
+          const total = (data.pagination && typeof data.pagination.total === 'number')
+            ? data.pagination.total
+            : (data.data?.length || 0);
+
+          // 写入全局缓存，供 lightbox 工具栏、卡片徽标复用
+          if (window.commentCountsData) {
+            window.commentCountsData[imageId] = total;
+          }
+
           renderComments(data.data || [], data.pagination);
-          updateCommentsCountBadge(data.data?.length || 0);
+          updateCommentsCountBadge(total);
+
+          // 同步更新 lightbox 工具栏（如果 lightbox 当前显示的是同一张图片）
+          if (typeof updateLightboxCommentCount === 'function' &&
+              window.currentLightboxImageId === imageId) {
+            updateLightboxCommentCount(total);
+          }
         } catch (e) {
           console.warn('加载评论失败:', e.message);
           body.innerHTML = '<div class="comments-empty"><div class="comments-empty-icon">💬</div><div class="comments-empty-title">暂无评论</div><div class="comments-empty-desc">成为第一个评论的人吧！</div></div>';
+          // 失败时把评论数归零并同步 lightbox，避免显示错误的旧值
+          if (window.commentCountsData) {
+            window.commentCountsData[imageId] = 0;
+          }
+          if (typeof updateLightboxCommentCount === 'function' &&
+              window.currentLightboxImageId === imageId) {
+            updateLightboxCommentCount(0);
+          }
         }
       }
 
@@ -2461,6 +2558,10 @@
       function updateBadge(threadKey, count) {
         if (threadKey.startsWith('image-')) {
           const imgId = threadKey.replace('image-', '');
+          // 同步写入全局缓存
+          if (window.commentCountsData) {
+            window.commentCountsData[imgId] = count;
+          }
           const card = document.querySelector('.image-card[data-id="' + imgId + '"]');
           if (card) {
             const btn = card.querySelector('.comment-btn');
@@ -2471,6 +2572,11 @@
                 badge.textContent = count > 99 ? '99+' : count;
               } else if (badge) { badge.remove(); }
             }
+          }
+          // ✅ 同步 lightbox 工具栏的评论数（如果当前显示的就是这张图片）
+          if (typeof updateLightboxCommentCount === 'function' &&
+              String(window.currentLightboxImageId) === String(imgId)) {
+            updateLightboxCommentCount(count);
           }
         }
         const lightboxCount = document.getElementById('lightboxCommentCount');
