@@ -1569,10 +1569,12 @@
     // 异步从 Supabase Storage 拉取新上传的图片,合并到列表中
     // 老图(15 张)继续从本地 images/ 读,新图从 public-gallery 读
     (async () => {
-      const SUPA_URL = (window.SUPABASE_CONFIG && window.SUPABASE_CONFIG.url)
-        || 'qlhfyawbyedhqokivezn.supabase.co';
+      // SUPABASE_CONFIG.url 已经是完整 https:// 形式,不要重复拼 https://
+      let SUPA_URL = (window.SUPABASE_CONFIG && window.SUPABASE_CONFIG.url)
+        || 'https://qlhfyawbyedhqokivezn.supabase.co';
+      if (!/^https?:\/\//i.test(SUPA_URL)) SUPA_URL = 'https://' + SUPA_URL;
       try {
-        const r = await fetch(`https://${SUPA_URL}/functions/v1/public-gallery/images`, {
+        const r = await fetch(`${SUPA_URL}/functions/v1/public-gallery/images`, {
           method: 'GET',
           headers: { 'apikey': (window.SUPABASE_CONFIG && window.SUPABASE_CONFIG.anonKey) || '' },
         });
@@ -3826,10 +3828,14 @@
     const submitBtn = document.getElementById('userUploadSubmitBtn');
 
     // 从 window.SUPABASE_CONFIG 拿配置
+    // SUPABASE_CONFIG.url 已经是完整 https:// 形式,直接返回;
+    // 但若未来被改成纯域名,自动补上 https:// 避免 ERR_NAME_NOT_RESOLVED
     function getConfig() {
       const cfg = window.SUPABASE_CONFIG || {};
+      let url = cfg.url || 'https://qlhfyawbyedhqokivezn.supabase.co';
+      if (!/^https?:\/\//i.test(url)) url = 'https://' + url;
       return {
-        url: cfg.url || 'qlhfyawbyedhqokivezn.supabase.co',
+        url,
         anonKey: cfg.anonKey || '',
       };
     }
@@ -3890,8 +3896,13 @@
 
       const { url, anonKey } = getConfig();
       const token = getToken();
+      const uploadUrl = `${url}/functions/v1/upload-image`;
+      console.log('[upload-image] 实际 URL:', uploadUrl);
+      // 兜底:如果还出现双 https,强制修正一次
+      const finalUrl = uploadUrl.replace(/(https?:\/\/)https?:\/\//i, '$1');
+      if (finalUrl !== uploadUrl) console.warn('[upload-image] 修正了双 https:', finalUrl);
       const xhr = new XMLHttpRequest();
-      xhr.open('POST', `https://${url}/functions/v1/upload-image`);
+      xhr.open('POST', finalUrl);
       xhr.setRequestHeader('apikey', anonKey);
       xhr.setRequestHeader('Authorization', 'Bearer ' + token);
       xhr.upload.onprogress = (ev) => {
@@ -3921,13 +3932,29 @@
           document.getElementById('uploadBar2').style.background = '#f87171';
         }
       };
-      xhr.onerror = () => {
+      xhr.onerror = (ev) => {
         submitBtn.disabled = false;
         submitBtn.textContent = '上传';
         const hint = location.protocol === 'file:'
           ? 'file:// 协议下无法上传,请通过 http:// 访问网站'
-          : '网络错误,请检查网络后重试';
-        document.getElementById('uploadStatus2').textContent = '❌ ' + hint;
+          : '请检查网络或浏览器控制台 (F12) Network 面板';
+        const msg = '❌ 网络错误 · ' + hint;
+        document.getElementById('uploadStatus2').textContent = msg;
+        document.getElementById('uploadBar2').style.background = '#f87171';
+        // 关键诊断信息打到 console
+        console.error('[upload-image] xhr error', {
+          protocol: location.protocol,
+          host: location.host,
+          readyState: xhr.readyState,
+          status: xhr.status,
+          response: (xhr.responseText || '').slice(0, 200),
+        });
+        // 同时显示在页面上
+        const detail = '状态: ' + xhr.status + ' · readyState: ' + xhr.readyState + ' · 协议: ' + location.protocol;
+        if (window.sxToast) window.sxToast(msg + ' · ' + detail, 'error');
+      };
+      xhr.ontimeout = () => {
+        document.getElementById('uploadStatus2').textContent = '❌ 上传超时,请重试或换更小的图';
         document.getElementById('uploadBar2').style.background = '#f87171';
       };
       xhr.send(fd);

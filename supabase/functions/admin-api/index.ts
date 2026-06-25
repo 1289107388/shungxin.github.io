@@ -198,6 +198,7 @@ Deno.serve(async (req) => {
         if (req.method === 'POST' && id === 'batch') return await handleBatchImages(supabase, ctx, req);
         if (req.method === 'PUT' && id && subAction === 'visibility') return await handleToggleImageVisibility(supabase, ctx, req, id);
         if (req.method === 'PUT' && id && subAction === 'meta')        return await handleUpdateImageMeta(supabase, ctx, req, id);
+        if (req.method === 'DELETE' && id) return await handleDeleteImage(supabase, ctx, id);
         return createErrorResponse('未知接口', 404);
 
       case 'audit-logs':
@@ -524,6 +525,58 @@ async function handleUpdateImageMeta(supabase, ctx, req, id) {
     { filename: data.filename, changes: Object.keys(update).filter(k => k !== 'updated_at') });
 
   return createCorsResponse({ success: true, data });
+}
+
+// ============================
+// 删除图片(单图) - 同时删除数据库记录和 storage 文件
+// ============================
+async function handleDeleteImage(supabase, ctx, id) {
+  // 1. 先查询拿到 storage_path(用于删除 storage 文件)
+  const { data: target, error: fetchErr } = await supabase
+    .from('gallery_images')
+    .select('id, filename, storage_path, storage_bucket, is_visible, uploaded_by')
+    .eq('id', id)
+    .maybeSingle();
+  if (fetchErr) { console.error('查询图片失败:', fetchErr); return createErrorResponse('查询失败', 500); }
+  if (!target) return createErrorResponse('图片不存在', 404);
+
+  // 2. 删数据库记录(级联: likes/views/comments 是手动级联 - 见下方)
+  // 先删依赖表(likes / views / comments),避免外键引用
+  const tblAndCol = {
+    image_likes: 'image_id',
+    image_views: 'image_id',
+  };
+  for (const [tbl, col] of Object.entries(tblAndCol)) {
+    const { error: delErr } = await supabase.from(tbl).delete().eq(col, id);
+    if (delErr) console.warn(`删除 ${tbl} 时警告(可忽略):`, delErr.message);
+  }
+  // comments 表有 image_id 字段,但可能没 ON DELETE CASCADE,需手动清理
+  // (comment-api 的 image_id 是普通整数,无外键,直接删)
+  const { error: cmtErr } = await supabase.from('comments').delete().eq('image_id', id);
+  if (cmtErr) console.warn('删除关联评论警告(可忽略):', cmtErr.message);
+
+  // 3. 删主表
+  const { error: delRowErr } = await supabase.from('gallery_images').delete().eq('id', id);
+  if (delRowErr) { console.error('删除图片记录失败:', delRowErr); return createErrorResponse('删除失败: ' + delRowErr.message, 500); }
+
+  // 4. 删 storage 文件(如果是 storage 上传的新图)
+  // 老图(没 storage_path)这一步跳过
+  if (target.storage_path) {
+    const { error: stoErr } = await supabase.storage
+      .from(target.storage_bucket || 'gallery-images')
+      .remove([target.storage_path]);
+    if (stoErr) console.warn('删除 storage 文件警告(可忽略):', stoErr.message);
+  }
+
+  // 5. 审计
+  await logAudit(supabase, ctx, 'images.delete', 'image', id, {
+    filename: target.filename,
+    storage_path: target.storage_path || null,
+    was_visible: target.is_visible,
+    was_user_upload: target.uploaded_by != null,
+  });
+
+  return createCorsResponse({ success: true, message: '图片已删除' });
 }
 
 // ============================

@@ -1011,6 +1011,7 @@ async function renderImages(c) {
         }
         <button class="btn btn-sm btn-secondary" onclick="toggleImageNew(${img.id}, ${!img.is_new})">${img.is_new ? '取消新' : '标新'}</button>
         <button class="btn btn-sm btn-secondary" onclick="editImageMeta(${img.id})">编辑</button>
+        <button class="btn btn-sm" style="background:var(--danger);color:#fff;" onclick="deleteImage(${img.id}, '${escapeHtml(img.filename).replace(/'/g, "\\'")}')">删除</button>
       </div>
     </div>
     `;
@@ -1038,6 +1039,20 @@ window.approveImage = async (id) => {
   try {
     await api(`/images/${id}/visibility`, { method: 'PUT', body: JSON.stringify({ is_visible: true }) });
     toast('已通过审核,图片已上线');
+    loadPage('images');
+  } catch (err) { toast(err.message, 'error'); }
+};
+// 删除单张图片(同时删 storage 文件)
+window.deleteImage = async (id, filename) => {
+  if (!confirmAction(`确定要永久删除图片 "${filename || id}" 吗?\n此操作会同时删除 storage 文件、点赞、浏览、评论,不可恢复!`)) return;
+  try {
+    await api(`/images/${id}`, { method: 'DELETE' });
+    toast('图片已删除');
+    // 清除本地选择
+    if (typeof getSelection === 'function') {
+      const s = getSelection();
+      s.delete(id);
+    }
     loadPage('images');
   } catch (err) { toast(err.message, 'error'); }
 };
@@ -1372,6 +1387,7 @@ function renderBatchBar() {
       <button class="btn btn-sm btn-secondary" onclick="batchImages('hide')">批量隐藏</button>
       <button class="btn btn-sm" onclick="batchImages('set_new')">标记为新作品</button>
       <button class="btn btn-sm btn-secondary" onclick="batchImages('unset_new')">取消新作品</button>
+      <button class="btn btn-sm" style="background:var(--danger);color:#fff;" onclick="batchImages('delete')">批量删除</button>
     `;
   } else if (page === 'comments') {
     actions = `
@@ -1420,9 +1436,25 @@ window.batchImages = async (action) => {
   const ids = Array.from(getSelection());
   if (!ids.length) return toast('请先勾选图片', 'error');
   // approve 映射到后端 show 动作 (通过审核 = 设为可见)
-  const text = { show: '显示', hide: '隐藏', set_new: '标为新作品', unset_new: '取消新作品', approve: '通过审核' }[action];
+  const text = { show: '显示', hide: '隐藏', set_new: '标为新作品', unset_new: '取消新作品', approve: '通过审核', delete: '删除' }[action];
   const backendAction = action === 'approve' ? 'show' : action;
   if (!confirmAction(`确定要批量${text} ${ids.length} 张图片?`)) return;
+
+  // 删除走单条循环(后端没有 batch delete 接口,简单可靠)
+  if (action === 'delete') {
+    if (!confirmAction(`再次确认: ${ids.length} 张图片将被永久删除,不可恢复!`)) return;
+    let ok = 0, fail = 0;
+    for (const id of ids) {
+      try {
+        await api(`/images/${id}`, { method: 'DELETE' });
+        ok++;
+      } catch (e) { console.error('删除失败', id, e); fail++; }
+    }
+    toast(`删除完成: 成功 ${ok} 张${fail ? `, 失败 ${fail} 张` : ''}`, fail ? 'error' : 'success');
+    loadPage('images');
+    return;
+  }
+
   return await runBatch('images', { action: backendAction });
 };
 
