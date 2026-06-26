@@ -6,6 +6,7 @@
 // ============================
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0';
+import { verifyOrigin } from '../_shared/originGuard.ts';
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
@@ -24,7 +25,13 @@ function createErrorResponse(message, status = 400) {
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') || '';
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
-const AUTH_SECRET = Deno.env.get('AUTH_SECRET') || 'shungxin_auth_secret_2024_change_in_prod';
+const AUTH_SECRET_RAW = Deno.env.get('AUTH_SECRET');
+// 修复: 移除硬编码回退值;未配置环境变量则抛错,
+// 避免任何人用源码里的默认值绕过鉴权
+if (!AUTH_SECRET_RAW || AUTH_SECRET_RAW.length < 32) {
+  throw new Error('AUTH_SECRET 环境变量未设置或长度不足 32 字符');
+}
+const AUTH_SECRET = AUTH_SECRET_RAW;
 const TOKEN_TTL_DAYS = 7;
 
 function createServiceClient() {
@@ -156,6 +163,10 @@ function validatePassword(p) {
 // 入口
 // ============================
 Deno.serve(async (req) => {
+  // 域名白名单
+  const blocked = verifyOrigin(req);
+  if (blocked) return blocked;
+
   if (req.method === 'OPTIONS') {
     return new Response(null, { status: 204, headers: CORS_HEADERS });
   }
@@ -338,12 +349,18 @@ async function issueToken(supabase, user, req) {
     iat: now, exp, v: 1,
   });
   const tokenHash = await hashToken(token);
-  await supabase.from('auth_sessions').insert({
+  // 修复: 不能再用 .then().catch() 吞掉错误,
+  // 否则 session 没写入但 token 已返回,前端拿到的 token 立刻 requireAuth 401
+  const { error: sessError } = await supabase.from('auth_sessions').insert({
     user_id: user.id, token_hash: tokenHash,
     expires_at: new Date(exp * 1000).toISOString(),
     ip: req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip') || null,
     user_agent: req.headers.get('user-agent') || null,
-  }).then(() => {}).catch((e) => console.warn('记录 session 失败:', e));
+  });
+  if (sessError) {
+    console.error('记录 session 失败:', sessError);
+    throw new Error('服务端 session 持久化失败,无法签发 token');
+  }
   return token;
 }
 

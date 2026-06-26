@@ -6,6 +6,7 @@
 // ============================
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0';
+import { verifyOrigin } from '../_shared/originGuard.ts';
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
@@ -51,6 +52,10 @@ const VIEW_MAX_PER_MINUTE = 30;
 const VIEW_WINDOW_MS = 60000;
 
 Deno.serve(async (req) => {
+  // 域名白名单
+  const blocked = verifyOrigin(req);
+  if (blocked) return blocked;
+
   if (req.method === 'OPTIONS') {
     return new Response(null, { status: 204, headers: CORS_HEADERS });
   }
@@ -108,42 +113,81 @@ async function handleIncrementView(req) {
 
   const supabase = createServiceClient();
   try {
-    const { data: existing, error: queryError } = await supabase
-      .from('image_views')
-      .select('id, count')
-      .eq('image_id', image_id)
-      .maybeSingle();
-    if (queryError) {
-      console.error('查询浏览量记录失败:', queryError);
-      return createErrorResponse('查询失败', 500);
-    }
+    // 修复: TOCTOU 竞态 (并发浏览场景)
+    // - 旧实现: 先 SELECT 再 UPDATE/INSERT,两个并发请求都看到 existing=null,
+    //   第一个 INSERT 成功,第二个 INSERT 触发 23505 错误
+    //   即使都看到 existing,都 UPDATE 成 count+1,可能漏计
+    // - 新实现: 用客户端乐观锁 + 字段相加避免丢更新
+    //   即使两个并发请求都读到 count=5、都想 UPDATE 成 6,
+    //   第二个 UPDATE 会因为 LSN 不匹配失败,重试一次读到 6 写成 7
+    //
+    // 注意: 完整解决方案是 SQL 层 RPC 原子递增
+    // (CREATE FUNCTION increment_view_count(p_image_id bigint) RETURNS int ...)
+    // 这里采用客户端乐观锁实现 80% 的修复,不依赖额外 SQL
+    const MAX_RETRY = 3;
+    let lastError = null;
+    for (let attempt = 0; attempt < MAX_RETRY; attempt++) {
+      const { data: existing, error: queryError } = await supabase
+        .from('image_views')
+        .select('id, count, updated_at')
+        .eq('image_id', image_id)
+        .maybeSingle();
+      if (queryError) {
+        console.error('查询浏览量记录失败:', queryError);
+        return createErrorResponse('查询失败', 500);
+      }
 
-    let newCount;
-    if (existing) {
-      newCount = existing.count + 1;
-      const { error: updateError } = await supabase
-        .from('image_views')
-        .update({ count: newCount, updated_at: new Date().toISOString() })
-        .eq('id', existing.id);
-      if (updateError) {
-        console.error('更新浏览量失败:', updateError);
-        return createErrorResponse('更新浏览量失败', 500);
-      }
-    } else {
-      newCount = 1;
-      const { error: insertError } = await supabase
-        .from('image_views')
-        .insert({ image_id, count: 1, created_at: new Date().toISOString(), updated_at: new Date().toISOString() });
-      if (insertError) {
-        console.error('创建浏览量记录失败:', insertError);
-        return createErrorResponse('创建浏览量记录失败', 500);
+      const newCount = (existing?.count ?? 0) + 1;
+      const now = new Date().toISOString();
+
+      if (existing) {
+        // 乐观锁: 条件中带 updated_at,避免覆盖并发更新
+        const { data: updated, error: updateError } = await supabase
+          .from('image_views')
+          .update({ count: newCount, updated_at: now })
+          .eq('id', existing.id)
+          .eq('updated_at', existing.updated_at)
+          .select('count')
+          .maybeSingle();
+        if (updateError) {
+          console.error('更新浏览量失败:', updateError);
+          return createErrorResponse('更新失败', 500);
+        }
+        if (updated) {
+          return createCorsResponse({
+            success: true,
+            message: '浏览量增加成功',
+            data: { image_id, count: updated.count },
+            rateLimit: { remaining: rateCheck.remaining, resetAt: new Date(rateCheck.resetAt).toISOString() },
+          });
+        }
+        // updated 为空说明有并发更新改了 updated_at,重试
+        lastError = new Error('concurrent update, retry');
+        continue;
+      } else {
+        // 不存在则插入;如果并发插入先成功,会触发 23505
+        const { error: insertError } = await supabase
+          .from('image_views')
+          .insert({ image_id, count: 1, created_at: now, updated_at: now });
+        if (insertError) {
+          if (insertError.code === '23505') {
+            // 并发请求已经先插入,下一轮 retry 进入 UPDATE 分支
+            lastError = insertError;
+            continue;
+          }
+          console.error('创建浏览量记录失败:', insertError);
+          return createErrorResponse('创建失败', 500);
+        }
+        return createCorsResponse({
+          success: true,
+          message: '浏览量增加成功',
+          data: { image_id, count: 1 },
+          rateLimit: { remaining: rateCheck.remaining, resetAt: new Date(rateCheck.resetAt).toISOString() },
+        });
       }
     }
-    return createCorsResponse({
-      success: true, message: '浏览量增加成功',
-      data: { image_id, count: newCount },
-      rateLimit: { remaining: rateCheck.remaining, resetAt: new Date(rateCheck.resetAt).toISOString() },
-    });
+    console.error('浏览量递增重试耗尽:', lastError);
+    return createErrorResponse('并发繁忙,请重试', 503);
   } catch (err) {
     console.error('增加浏览量失败:', err);
     return createErrorResponse('增加浏览量失败', 500);

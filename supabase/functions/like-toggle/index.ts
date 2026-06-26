@@ -6,6 +6,7 @@
 // ============================
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0';
+import { verifyOrigin } from '../_shared/originGuard.ts';
 
 // === 共享：CORS 配置 ===
 const CORS_HEADERS = {
@@ -58,6 +59,10 @@ const LIKE_MAX_PER_MINUTE = 10;
 const LIKE_WINDOW_MS = 60000;
 
 Deno.serve(async (req) => {
+  // 域名白名单
+  const blocked = verifyOrigin(req);
+  if (blocked) return blocked;
+
   if (req.method === 'OPTIONS') {
     return new Response(null, { status: 204, headers: CORS_HEADERS });
   }
@@ -129,28 +134,64 @@ async function handleGetLikeCounts() {
 }
 
 async function handleLikeToggle(supabase, imageId, action, userId) {
-  const { data: existing, error: queryError } = await supabase.from('likes').select('id').eq('image_id', imageId).eq('user_id', userId).maybeSingle();
-  if (queryError) { console.error('查询点赞记录失败:', queryError); throw new Error('数据库查询失败'); }
+  // 修复: TOCTOU 竞态 (并发点赞场景)
+  // - 旧实现: 先 SELECT 再 INSERT/DELETE,两个并发"like"都看到 existing=null,
+  //   都尝试 INSERT,要么产生重复记录(无唯一约束),要么 23505 错误
+  // - 新实现: 用 upsert(like)/delete(unlike),依赖 likes 表的
+  //   (image_id, user_id) 唯一约束保证幂等
 
   if (action === 'like') {
-    if (existing) return { success: false, message: '已经点赞过了', count: 0 };
+    // upsert: 已存在则 no-op,不存在则插入
+    const { data: upsertData, error: upsertError } = await supabase
+      .from('likes')
+      .upsert(
+        { image_id: imageId, user_id: userId },
+        { onConflict: 'image_id,user_id', ignoreDuplicates: true }
+      )
+      .select('id');
 
-    const { error: insertError } = await supabase.from('likes').insert({ image_id: imageId, user_id: userId });
-    if (insertError) { console.error('插入点赞记录失败:', insertError); throw new Error('点赞失败'); }
+    if (upsertError) {
+      console.error('点赞 upsert 失败:', upsertError);
+      throw new Error('点赞失败');
+    }
 
-    await logOperation(supabase, 'like', imageId, userId);
+    // 如果 upsert 返回空数组,说明记录已存在(被并发请求抢先)
+    const isNewLike = Array.isArray(upsertData) && upsertData.length > 0;
+
+    if (isNewLike) {
+      await logOperation(supabase, 'like', imageId, userId);
+    }
+
     const { data: countData } = await supabase.from('image_likes').select('count').eq('image_id', imageId).single();
-    return { success: true, message: '点赞成功', count: countData?.count || 0 };
-
+    return {
+      success: true,
+      message: isNewLike ? '点赞成功' : '已经点赞过了',
+      count: countData?.count || 0,
+      isNewLike,
+    };
   } else {
-    if (!existing) return { success: false, message: '尚未点赞', count: 0 };
+    // unlike: 直接 delete,删除 0 行也不报错
+    const { error: deleteError, count: deletedCount } = await supabase
+      .from('likes')
+      .delete({ count: 'exact' })
+      .eq('image_id', imageId)
+      .eq('user_id', userId);
 
-    const { error: deleteError } = await supabase.from('likes').delete().eq('id', existing.id);
-    if (deleteError) { console.error('删除点赞记录失败:', deleteError); throw new Error('取消点赞失败'); }
+    if (deleteError) {
+      console.error('取消点赞 delete 失败:', deleteError);
+      throw new Error('取消点赞失败');
+    }
 
-    await logOperation(supabase, 'unlike', imageId, userId);
+    if (deletedCount > 0) {
+      await logOperation(supabase, 'unlike', imageId, userId);
+    }
+
     const { data: countData } = await supabase.from('image_likes').select('count').eq('image_id', imageId).single();
-    return { success: true, message: '已取消点赞', count: countData?.count || 0 };
+    return {
+      success: true,
+      message: deletedCount > 0 ? '已取消点赞' : '尚未点赞',
+      count: countData?.count || 0,
+    };
   }
 }
 

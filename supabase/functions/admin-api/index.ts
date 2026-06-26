@@ -6,6 +6,8 @@
 // ============================
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0';
+import { verifyOrigin } from '../_shared/originGuard.ts';
+import { safeParseInt } from '../_shared/safeParams.ts';
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
@@ -24,7 +26,11 @@ function createErrorResponse(message, status = 400) {
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') || '';
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
-const AUTH_SECRET = Deno.env.get('AUTH_SECRET') || 'shungxin_auth_secret_2024_change_in_prod';
+const AUTH_SECRET_RAW = Deno.env.get('AUTH_SECRET');
+if (!AUTH_SECRET_RAW || AUTH_SECRET_RAW.length < 32) {
+  throw new Error('AUTH_SECRET 环境变量未设置或长度不足 32 字符');
+}
+const AUTH_SECRET = AUTH_SECRET_RAW;
 const TOKEN_TTL_DAYS = 7;
 
 function createServiceClient() {
@@ -139,6 +145,10 @@ async function logAudit(supabase, ctx, action, targetType, targetId, details) {
 // 入口
 // ============================
 Deno.serve(async (req) => {
+  // 域名白名单
+  const blocked = verifyOrigin(req);
+  if (blocked) return blocked;
+
   if (req.method === 'OPTIONS') {
     return new Response(null, { status: 204, headers: CORS_HEADERS });
   }
@@ -302,16 +312,30 @@ async function handleDashboard(supabase) {
 // 用户管理
 // ============================
 async function handleListUsers(supabase, url) {
-  const page = Math.max(1, parseInt(url.searchParams.get('page') || '1'));
-  const pageSize = Math.min(100, Math.max(1, parseInt(url.searchParams.get('pageSize') || '20')));
+  // 修复: 防御 NaN 攻击
+  const page = safeParseInt(url.searchParams.get('page'), 1, 1);
+  const pageSize = safeParseInt(url.searchParams.get('pageSize'), 20, 1, 100);
   const search = (url.searchParams.get('search') || '').trim();
   const role = url.searchParams.get('role') || '';
   const status = url.searchParams.get('status') || '';  // active | inactive | ''
 
+  // 修复: 防御 PostgREST .or() 注入
+  // 用户可在 search 里塞 `%,is_active.eq.true` 等字符,改变过滤范围
+  // 需要转义 PostgREST 特殊字符: `,`、`.`、`(`、`)`
+  const safeSearch = search
+    .replace(/\\/g, '\\\\')
+    .replace(/,/g, '\\,')
+    .replace(/\./g, '\\.')
+    .replace(/\(/g, '\\(')
+    .replace(/\)/g, '\\)')
+    // ilike 通配符也需转义,避免 %foo% 行为异常
+    .replace(/%/g, '\\%')
+    .replace(/_/g, '\\_');
+
   let q = supabase.from('users')
     .select('id, username, display_name, avatar, role, is_active, created_at, last_login_at', { count: 'exact' })
     .order('created_at', { ascending: false });
-  if (search) q = q.or(`username.ilike.%${search}%,display_name.ilike.%${search}%`);
+  if (safeSearch) q = q.or(`username.ilike.%${safeSearch}%,display_name.ilike.%${safeSearch}%`);
   if (role)   q = q.eq('role', role);
   if (status === 'active')   q = q.eq('is_active', true);
   if (status === 'inactive') q = q.eq('is_active', false);
@@ -405,8 +429,9 @@ async function handleDeleteUser(supabase, ctx, id) {
 // 评论管理
 // ============================
 async function handleListComments(supabase, url) {
-  const page = Math.max(1, parseInt(url.searchParams.get('page') || '1'));
-  const pageSize = Math.min(100, Math.max(1, parseInt(url.searchParams.get('pageSize') || '20')));
+  // 修复: 防御 NaN
+  const page = safeParseInt(url.searchParams.get('page'), 1, 1);
+  const pageSize = safeParseInt(url.searchParams.get('pageSize'), 20, 1, 100);
   const status = url.searchParams.get('status') || '';
   const search = (url.searchParams.get('search') || '').trim();
 
@@ -583,8 +608,9 @@ async function handleDeleteImage(supabase, ctx, id) {
 // 审计日志
 // ============================
 async function handleListAuditLogs(supabase, url) {
-  const page = Math.max(1, parseInt(url.searchParams.get('page') || '1'));
-  const pageSize = Math.min(100, Math.max(1, parseInt(url.searchParams.get('pageSize') || '20')));
+  // 修复: 防御 NaN
+  const page = safeParseInt(url.searchParams.get('page'), 1, 1);
+  const pageSize = safeParseInt(url.searchParams.get('pageSize'), 20, 1, 100);
   const action = url.searchParams.get('action') || '';
   const adminId = url.searchParams.get('admin_id') || '';
 
