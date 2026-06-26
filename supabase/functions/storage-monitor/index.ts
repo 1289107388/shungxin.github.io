@@ -6,6 +6,8 @@
 // ============================
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0';
+import { verifyOrigin } from '../_shared/originGuard.ts';
+import { checkRateLimit } from '../_shared/rateLimiter.ts';
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
@@ -35,12 +37,25 @@ const STORAGE_WARNING_MB = 450;
 const STORAGE_CRITICAL_MB = 480;
 
 Deno.serve(async (req) => {
+  // 域名白名单
+  const blocked = verifyOrigin(req);
+  if (blocked) return blocked;
+
   if (req.method === 'OPTIONS') {
     return new Response(null, { status: 204, headers: CORS_HEADERS });
   }
 
   if (req.method !== 'GET' && req.method !== 'POST') {
     return createErrorResponse('仅支持 GET/POST 请求', 405);
+  }
+
+  // 限流:10 次/分钟/IP(admin 工具,不需要太频繁)
+  const clientIp = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim()
+    || req.headers.get('x-real-ip')
+    || 'unknown';
+  const rl = checkRateLimit(`storage-monitor:${clientIp}`, 10, 60_000);
+  if (!rl.allowed) {
+    return createErrorResponse('请求过于频繁,请稍后再试(每分钟最多 10 次)', 429);
   }
 
   try {

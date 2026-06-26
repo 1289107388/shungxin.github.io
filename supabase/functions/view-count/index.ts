@@ -32,6 +32,45 @@ function createServiceClient() {
   });
 }
 
+// === 共享：Token 校验（通过 auth_sessions 表，与 auth-api 保持一致） ===
+function base64urlEncode(bytes: Uint8Array): string {
+  let s = '';
+  for (const b of bytes) s += String.fromCharCode(b);
+  return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+async function hashToken(token: string): Promise<string> {
+  const bytes = new TextEncoder().encode(token);
+  const hash = await crypto.subtle.digest('SHA-256', bytes);
+  return base64urlEncode(new Uint8Array(hash));
+}
+async function verifyToken(token: string): Promise<{ sub: string; [key: string]: unknown } | null> {
+  if (!token || typeof token !== 'string') return null;
+  const tokenHash = await hashToken(token);
+  const supabase = createServiceClient();
+  const { data: session } = await supabase
+    .from('auth_sessions')
+    .select('user_id, expires_at')
+    .eq('token_hash', tokenHash)
+    .maybeSingle();
+  if (!session) return null;
+  if (new Date(session.expires_at) < new Date()) {
+    await supabase.from('auth_sessions').delete().eq('token_hash', tokenHash);
+    return null;
+  }
+  const { data: row } = await supabase
+    .from('users')
+    .select('id, is_active')
+    .eq('id', session.user_id)
+    .maybeSingle();
+  if (!row || !row.is_active) return null;
+  return { sub: String(row.id) };
+}
+function getBearerToken(req: Request): string | null {
+  const h = req.headers.get('authorization') || '';
+  const m = h.match(/^Bearer\s+(.+)$/i);
+  return m ? m[1].trim() : null;
+}
+
 const rateLimitStore = new Map();
 function checkRateLimit(key, maxRequests = 30, windowMs = 60000) {
   const now = Date.now();
@@ -95,16 +134,24 @@ async function handleIncrementView(req) {
     return createErrorResponse('仅支持 POST 请求', 405);
   }
 
+  // 仅登录用户可计浏览量
+  const token = getBearerToken(req);
+  if (!token) return createErrorResponse('请先登录', 401);
+  const payload = await verifyToken(token);
+  if (!payload) return createErrorResponse('Token 无效或已过期', 401);
+  const userId = payload.sub;
+  if (!userId) return createErrorResponse('Token 中无用户 ID', 401);
+
   let body;
   try { body = await req.json(); } catch { return createErrorResponse('请求体必须是有效的 JSON', 400); }
-  const { image_id, viewer_id } = body;
+  const { image_id } = body;
 
   if (!image_id || typeof image_id !== 'number' || image_id <= 0) {
     return createErrorResponse('image_id 无效', 400);
   }
 
   const clientIp = req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip') || 'unknown';
-  const rateKey = `view:${clientIp}:${viewer_id || 'anon'}`;
+  const rateKey = `view:${clientIp}:${userId}`;
   const rateCheck = checkRateLimit(rateKey, VIEW_MAX_PER_MINUTE, VIEW_WINDOW_MS);
 
   if (!rateCheck.allowed) {
@@ -113,6 +160,22 @@ async function handleIncrementView(req) {
 
   const supabase = createServiceClient();
   try {
+    // 同一用户同一图片仅记录一次浏览
+    const { data: existingView } = await supabase
+      .from('image_view_records')
+      .select('id')
+      .eq('image_id', image_id)
+      .eq('user_id', userId)
+      .maybeSingle();
+    if (existingView) {
+      // 已浏览过，返回当前总数
+      const { data: countData } = await supabase.from('image_views').select('count').eq('image_id', image_id).maybeSingle();
+      return createCorsResponse({
+        success: true,
+        message: '已浏览过',
+        data: { image_id, count: countData?.count || 0 },
+      });
+    }
     // 修复: TOCTOU 竞态 (并发浏览场景)
     // - 旧实现: 先 SELECT 再 UPDATE/INSERT,两个并发请求都看到 existing=null,
     //   第一个 INSERT 成功,第二个 INSERT 触发 23505 错误
@@ -154,6 +217,7 @@ async function handleIncrementView(req) {
           return createErrorResponse('更新失败', 500);
         }
         if (updated) {
+          await recordViewer(supabase, image_id, userId);
           return createCorsResponse({
             success: true,
             message: '浏览量增加成功',
@@ -178,6 +242,7 @@ async function handleIncrementView(req) {
           console.error('创建浏览量记录失败:', insertError);
           return createErrorResponse('创建失败', 500);
         }
+        await recordViewer(supabase, image_id, userId);
         return createCorsResponse({
           success: true,
           message: '浏览量增加成功',
@@ -191,5 +256,18 @@ async function handleIncrementView(req) {
   } catch (err) {
     console.error('增加浏览量失败:', err);
     return createErrorResponse('增加浏览量失败', 500);
+  }
+}
+
+async function recordViewer(supabase, imageId: number, userId: string) {
+  try {
+    await supabase
+      .from('image_view_records')
+      .upsert(
+        { image_id: imageId, user_id: userId, viewed_at: new Date().toISOString() },
+        { onConflict: 'image_id,user_id', ignoreDuplicates: true }
+      );
+  } catch (e) {
+    console.warn('记录浏览者失败:', e);
   }
 }

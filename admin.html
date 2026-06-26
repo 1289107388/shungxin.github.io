@@ -666,7 +666,6 @@ async function doLogin(username, password) {
     headers: {
       'Content-Type': 'application/json',
       'apikey': ANON_KEY,
-      'Authorization': 'Bearer ' + ANON_KEY,
     },
     body: JSON.stringify({ username, password }),
   });
@@ -932,7 +931,13 @@ function renderUserTable({ users, total, page, pageSize }) {
   });
 }
 
-window.toggleUserStatus = async (id, newStatus) => {
+// ============================
+// 统一管理后台操作（减少全局函数污染）
+// ============================
+const AdminActions = {};
+
+// 用户管理
+AdminActions.toggleUserStatus = async (id, newStatus) => {
   if (!confirmAction(newStatus ? '确定要启用该用户?' : '确定要禁用该用户?')) return;
   try {
     await api(`/users/${id}/status`, { method: 'PUT', body: JSON.stringify({ is_active: newStatus }) });
@@ -940,7 +945,8 @@ window.toggleUserStatus = async (id, newStatus) => {
     loadUsers();
   } catch (err) { toast(err.message, 'error'); }
 };
-window.toggleUserRole = async (id, newRole) => {
+
+AdminActions.toggleUserRole = async (id, newRole) => {
   if (!confirmAction(`确定要${newRole === 'admin' ? '提升为管理员' : '降级为普通用户'}?`)) return;
   try {
     await api(`/users/${id}/role`, { method: 'PUT', body: JSON.stringify({ role: newRole }) });
@@ -948,7 +954,8 @@ window.toggleUserRole = async (id, newRole) => {
     loadUsers();
   } catch (err) { toast(err.message, 'error'); }
 };
-window.deleteUser = async (id, username) => {
+
+AdminActions.deleteUser = async (id, username) => {
   if (!confirmAction(`确定要删除用户「${username}」? 该操作不可恢复!`)) return;
   try {
     await api(`/users/${id}`, { method: 'DELETE' });
@@ -956,6 +963,11 @@ window.deleteUser = async (id, username) => {
     loadUsers();
   } catch (err) { toast(err.message, 'error'); }
 };
+
+// 兼容旧的全局函数名（向后兼容）
+window.toggleUserStatus = AdminActions.toggleUserStatus;
+window.toggleUserRole = AdminActions.toggleUserRole;
+window.deleteUser = AdminActions.deleteUser;
 
 // ============================
 // 图片管理
@@ -1027,7 +1039,8 @@ async function renderImages(c) {
   });
 }
 
-window.toggleImageVisibility = async (id, newVal) => {
+// 图片管理
+AdminActions.toggleImageVisibility = async (id, newVal) => {
   try {
     await api(`/images/${id}/visibility`, { method: 'PUT', body: JSON.stringify({ is_visible: newVal }) });
     toast('已' + (newVal ? '显示' : '隐藏'));
@@ -1035,7 +1048,7 @@ window.toggleImageVisibility = async (id, newVal) => {
   } catch (err) { toast(err.message, 'error'); }
 };
 // 审核通过 (待审核 -> 显示)
-window.approveImage = async (id) => {
+AdminActions.approveImage = async (id) => {
   try {
     await api(`/images/${id}/visibility`, { method: 'PUT', body: JSON.stringify({ is_visible: true }) });
     toast('已通过审核,图片已上线');
@@ -1043,7 +1056,7 @@ window.approveImage = async (id) => {
   } catch (err) { toast(err.message, 'error'); }
 };
 // 删除单张图片(同时删 storage 文件)
-window.deleteImage = async (id, filename) => {
+AdminActions.deleteImage = async (id, filename) => {
   if (!confirmAction(`确定要永久删除图片 "${filename || id}" 吗?\n此操作会同时删除 storage 文件、点赞、浏览、评论,不可恢复!`)) return;
   try {
     await api(`/images/${id}`, { method: 'DELETE' });
@@ -1056,14 +1069,14 @@ window.deleteImage = async (id, filename) => {
     loadPage('images');
   } catch (err) { toast(err.message, 'error'); }
 };
-window.toggleImageNew = async (id, newVal) => {
+AdminActions.toggleImageNew = async (id, newVal) => {
   try {
     await api(`/images/${id}/meta`, { method: 'PUT', body: JSON.stringify({ is_new: newVal }) });
     toast('已更新');
     loadPage('images');
   } catch (err) { toast(err.message, 'error'); }
 };
-window.editImageMeta = async (id) => {
+AdminActions.editImageMeta = async (id) => {
   const { data: img } = await api(`/images`);  // 简化:从列表中找
   const target = img.images.find(i => i.id === id);
   if (!target) return;

@@ -37,6 +37,45 @@ function createServiceClient() {
   });
 }
 
+// === 共享：Token 校验（通过 auth_sessions 表，与 auth-api 保持一致） ===
+function base64urlEncode(bytes: Uint8Array): string {
+  let s = '';
+  for (const b of bytes) s += String.fromCharCode(b);
+  return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+async function hashToken(token: string): Promise<string> {
+  const bytes = new TextEncoder().encode(token);
+  const hash = await crypto.subtle.digest('SHA-256', bytes);
+  return base64urlEncode(new Uint8Array(hash));
+}
+async function verifyToken(token: string): Promise<{ sub: string; [key: string]: unknown } | null> {
+  if (!token || typeof token !== 'string') return null;
+  const tokenHash = await hashToken(token);
+  const supabase = createServiceClient();
+  const { data: session } = await supabase
+    .from('auth_sessions')
+    .select('user_id, expires_at')
+    .eq('token_hash', tokenHash)
+    .maybeSingle();
+  if (!session) return null;
+  if (new Date(session.expires_at) < new Date()) {
+    await supabase.from('auth_sessions').delete().eq('token_hash', tokenHash);
+    return null;
+  }
+  const { data: row } = await supabase
+    .from('users')
+    .select('id, is_active')
+    .eq('id', session.user_id)
+    .maybeSingle();
+  if (!row || !row.is_active) return null;
+  return { sub: String(row.id) };
+}
+function getBearerToken(req: Request): string | null {
+  const h = req.headers.get('authorization') || '';
+  const m = h.match(/^Bearer\s+(.+)$/i);
+  return m ? m[1].trim() : null;
+}
+
 // === 共享：限流器 ===
 const rateLimitStore = new Map();
 function checkRateLimit(key, maxRequests = 10, windowMs = 60000) {
@@ -75,14 +114,26 @@ Deno.serve(async (req) => {
       return await handleGetLikeCounts();
     }
 
+    if (path === 'my-likes') {
+      return await handleGetMyLikes(req);
+    }
+
     if (req.method !== 'POST') {
       return createErrorResponse('仅支持 POST 请求', 405);
     }
 
+    // 点赞/取消点赞必须登录
+    const token = getBearerToken(req);
+    if (!token) return createErrorResponse('请先登录', 401);
+    const payload = await verifyToken(token);
+    if (!payload) return createErrorResponse('Token 无效或已过期', 401);
+    const userId = payload.sub;
+    if (!userId) return createErrorResponse('Token 中无用户 ID', 401);
+
     let body;
     try { body = await req.json(); } catch { return createErrorResponse('请求体必须是有效的 JSON', 400); }
 
-    const { image_id, action, user_id } = body;
+    const { image_id, action } = body;
 
     if (!image_id || typeof image_id !== 'number' || image_id <= 0) {
       return createErrorResponse('image_id 必须是正整数', 400);
@@ -90,12 +141,9 @@ Deno.serve(async (req) => {
     if (!action || (action !== 'like' && action !== 'unlike')) {
       return createErrorResponse('action 必须是 like 或 unlike', 400);
     }
-    if (!user_id || typeof user_id !== 'string' || user_id.length < 3) {
-      return createErrorResponse('user_id 无效', 400);
-    }
 
     const clientIp = req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip') || 'unknown';
-    const rateKey = `like:${clientIp}:${user_id}`;
+    const rateKey = `like:${clientIp}:${userId}`;
     const rateCheck = checkRateLimit(rateKey, LIKE_MAX_PER_MINUTE, LIKE_WINDOW_MS);
 
     if (!rateCheck.allowed) {
@@ -105,7 +153,7 @@ Deno.serve(async (req) => {
     }
 
     const supabase = createServiceClient();
-    const result = await handleLikeToggle(supabase, image_id, action, user_id);
+    const result = await handleLikeToggle(supabase, image_id, action, userId);
 
     if (!result.success) {
       return createErrorResponse(result.message, 400);
@@ -131,6 +179,25 @@ async function handleGetLikeCounts() {
   const counts = {};
   if (data) data.forEach((item) => { counts[item.image_id] = item.count; });
   return createCorsResponse({ success: true, data: counts });
+}
+
+async function handleGetMyLikes(req: Request) {
+  const token = getBearerToken(req);
+  if (!token) return createErrorResponse('请先登录', 401);
+  const payload = await verifyToken(token);
+  if (!payload) return createErrorResponse('Token 无效或已过期', 401);
+  const userId = payload.sub;
+  if (!userId) return createErrorResponse('Token 中无用户 ID', 401);
+
+  const supabase = createServiceClient();
+  const { data, error } = await supabase
+    .from('likes')
+    .select('image_id')
+    .eq('user_id', userId);
+  if (error) { console.error('查询我的点赞失败:', error); return createErrorResponse('查询我的点赞失败', 500); }
+
+  const ids = (data || []).map((item) => item.image_id);
+  return createCorsResponse({ success: true, data: ids });
 }
 
 async function handleLikeToggle(supabase, imageId, action, userId) {

@@ -9,13 +9,23 @@
 // ============================
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0';
+import { verifyOrigin } from '../_shared/originGuard.ts';
+import { checkRateLimit } from '../_shared/rateLimiter.ts';
 // 注: 暂不压缩(避免 Deno Deploy 上 sharp/jsquash 的兼容问题)
 // 用户上传原图直接存,后续可挂 Cloudflare Images / imgproxy 做边缘压缩
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') || '';
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
-const AUTH_SECRET = Deno.env.get('AUTH_SECRET') || 'shungxin_auth_secret_2024_change_in_prod';
+const AUTH_SECRET_RAW = Deno.env.get('AUTH_SECRET');
+if (!AUTH_SECRET_RAW || AUTH_SECRET_RAW.length < 32) {
+  throw new Error('AUTH_SECRET 环境变量未设置或长度不足 32 字符');
+}
+const AUTH_SECRET = AUTH_SECRET_RAW;
 const BUCKET = 'gallery-images';
+
+// upload-image 的限流: 30 次/分钟/IP(防止刷配额)
+// 注: 真正精细的每日 5 张限制在 handleUpload 里靠 user_id 计数
+const UPLOAD_RATE_LIMIT_PER_MIN = 30;
 
 // ---------- CORS ----------
 const CORS_HEADERS = {
@@ -146,12 +156,69 @@ function readU32BE(b, o) { return (b[o] << 24) | (b[o + 1] << 16) | (b[o + 2] <<
 function readU16BE(b, o) { return (b[o] << 8) | b[o + 1]; }
 function readU16LE(b, o) { return b[o] | (b[o + 1] << 8); }
 
+// ===== P0-1.3: 魔数二次校验 =====
+// 给定文件前 16 字节 + 声明的 MIME,验证文件头是否匹配
+// 严格检查:file.type 是客户端声明,这里只允许 mime 与 header 真正一致的请求通过
+function verifyImageMagicHeader(bytes, claimedMime) {
+  if (!bytes || bytes.length < 4) return { ok: false, reason: '文件头太短' };
+
+  // 探测真实类型
+  let realType = null;
+  // JPEG: FF D8 FF
+  if (bytes[0] === 0xFF && bytes[1] === 0xD8 && bytes[2] === 0xFF) realType = 'image/jpeg';
+  // PNG: 89 50 4E 47 0D 0A 1A 0A
+  else if (bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4E && bytes[3] === 0x47
+        && bytes[4] === 0x0D && bytes[5] === 0x0A && bytes[6] === 0x1A && bytes[7] === 0x0A) realType = 'image/png';
+  // WebP: 52 49 46 46 ?? ?? ?? ?? 57 45 42 50
+  else if (bytes[0] === 0x52 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x46
+        && bytes[8] === 0x57 && bytes[9] === 0x45 && bytes[10] === 0x42 && bytes[11] === 0x50) realType = 'image/webp';
+  // GIF: 47 49 46 38
+  else if (bytes[0] === 0x47 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x38) realType = 'image/gif';
+  // HEIC/HEIF/AVIF: 头 4 字节任意,字节 4-7 = 66 74 79 70
+  else if (bytes[4] === 0x66 && bytes[5] === 0x74 && bytes[6] === 0x79 && bytes[7] === 0x70) {
+    const brand = String.fromCharCode(bytes[8], bytes[9], bytes[10], bytes[11]);
+    if (['heic', 'heix', 'heim', 'heis'].indexOf(brand) >= 0) realType = 'image/heic';
+    else if (['mif1', 'msf1'].indexOf(brand) >= 0) realType = 'image/heif';
+    else if (['avif', 'avis'].indexOf(brand) >= 0) realType = 'image/avif';
+  }
+  // BMP: 42 4D
+  else if (bytes[0] === 0x42 && bytes[1] === 0x4D) realType = 'image/bmp';
+
+  if (!realType) {
+    return { ok: false, reason: '文件头不是已知图片格式' };
+  }
+
+  // 客户端声明的 mime 必须与真实文件头匹配(或在容差范围)
+  // 例外:image/jpg / image/jpe 在浏览器里有时声明为 image/jpeg
+  const normalize = (m) => (m || '').toLowerCase().replace('image/jpg', 'image/jpeg').replace('image/jpe', 'image/jpeg');
+  if (normalize(claimedMime) !== normalize(realType)) {
+    return { ok: false, reason: `声明 ${claimedMime} 但实际是 ${realType}` };
+  }
+
+  return { ok: true, type: realType };
+}
+
 // ---------- 主入口 ----------
 Deno.serve(async (req) => {
+  // 域名白名单
+  const blocked = verifyOrigin(req);
+  if (blocked) return blocked;
+
   if (req.method === 'OPTIONS') {
     return new Response(null, { status: 204, headers: CORS_HEADERS });
   }
   if (req.method !== 'POST') return err('仅支持 POST', 405);
+
+  // 限流:按 IP,30 次/分钟
+  // 真实部署时,Supabase Edge Function 拿不到真实 IP(只能拿到 Deno 内部 IP),
+  // 用 'x-forwarded-for' 头作为 fallback
+  const clientIp = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim()
+    || req.headers.get('x-real-ip')
+    || 'unknown';
+  const rl = checkRateLimit(`upload:${clientIp}`, UPLOAD_RATE_LIMIT_PER_MIN, 60_000);
+  if (!rl.allowed) {
+    return err(`上传过于频繁,请稍后再试(每分钟最多 ${UPLOAD_RATE_LIMIT_PER_MIN} 次)`, 429);
+  }
 
   try {
     return await handleUpload(req);
@@ -207,6 +274,21 @@ async function handleUpload(req) {
     return err('图片大小不能超过 10MB', 400);
   }
   if (file.size === 0) return err('文件为空', 400);
+
+  // 3a) P0-1.3: 文件名黑名单(防止脚本/可执行文件伪装)
+  const fname = (file.name || '').toLowerCase();
+  const blockedExts = ['.php', '.exe', '.sh', '.bat', '.cmd', '.js', '.html', '.htm', '.svg', '.xml', '.asp', '.aspx', '.jsp', '.cgi', '.pl', '.py', '.phtml', '.phar'];
+  for (const ext of blockedExts) {
+    if (fname.endsWith(ext)) return err(`文件名后缀不允许: ${ext}`, 400);
+  }
+
+  // 3b) P0-1.3: 魔数二次校验(防绕过浏览器直接打 API)
+  // file.type 是客户端声明的,完全可控,必须读真实文件头核对
+  const headerBytes = new Uint8Array(await file.slice(0, 16).arrayBuffer());
+  const magicCheck = verifyImageMagicHeader(headerBytes, file.type);
+  if (!magicCheck.ok) {
+    return err(`文件内容与扩展名不符: ${magicCheck.reason}`, 400);
+  }
 
   // 4) 暂不压缩: 原图直接使用(保持原 mime 和扩展名)
   //    后续可挂 CDN 边缘压缩,或部署到支持 sharp 的环境后再开启
