@@ -19,7 +19,10 @@
       try {
         const r = await fetch(`${SUPA_URL}/functions/v1/public-gallery/images`, {
           method: 'GET',
-          headers: { 'apikey': ANON_KEY },
+          headers: {
+            'apikey': ANON_KEY,
+            'Authorization': 'Bearer ' + ANON_KEY,
+          },
         });
         if (!r.ok) {
           console.warn('[public-gallery] 拉取失败,http=' + r.status);
@@ -58,7 +61,11 @@
           document.querySelector('.filter-btn.active')?.click();
         }
       } catch (e) {
-        console.warn('[public-gallery] 拉取错误(file:// 模式下会失败):', e.message);
+        const msg = String(e.message || e).toLowerCase();
+        const isAbort = msg.includes('aborted') || msg.includes('abort') || msg.includes('cancel');
+        if (!isAbort) {
+          console.warn('[public-gallery] 拉取错误(file:// 模式下会失败):', e.message);
+        }
       }
     })();
 
@@ -149,7 +156,14 @@
             return viewsB - viewsA;
           });
         default:
-          return sorted.sort((a, b) => a.id - b.id);
+          // 优先按 sort_order,其次 id(兼容字符串 id)
+          return sorted.sort((a, b) => {
+            const ao = a.sort_order != null ? a.sort_order : 999;
+            const bo = b.sort_order != null ? b.sort_order : 999;
+            if (ao !== bo) return ao - bo;
+            if (typeof a.id === 'number' && typeof b.id === 'number') return a.id - b.id;
+            return String(a.id).localeCompare(String(b.id));
+          });
       }
     }
 
@@ -168,6 +182,17 @@
     function applySortingAndRender() {
       sortedImages = sortImages(filteredImages, currentSort);
       galleryGrid.innerHTML = '';
+
+      if (!sortedImages.length) {
+        galleryGrid.innerHTML = `
+          <div class="gallery-empty">
+            <svg viewBox="0 0 24 24" width="64" height="64" fill="none" stroke="currentColor" stroke-width="1.2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg>
+            <div class="gallery-empty-title">暂无图片</div>
+            <div class="gallery-empty-desc">该分类下暂时没有作品，换个分类看看吧。</div>
+          </div>
+        `;
+        return;
+      }
 
       sortedImages.forEach((img, index) => {
         const card = document.createElement('div');
@@ -256,9 +281,12 @@
           if (currentIndex >= 0) window.openLightbox(currentIndex);
         });
 
-        card.querySelector('.like-btn').addEventListener('click', (e) => { e.stopPropagation(); window.toggleLike(img.id); });
-        card.querySelector('.save-btn').addEventListener('click', (e) => { e.stopPropagation(); window.saveImage(img); });
-        card.querySelector('.share-btn').addEventListener('click', (e) => { e.stopPropagation(); window.shareImage(img); });
+        const likeBtn = card.querySelector('.like-btn');
+        const saveBtn = card.querySelector('.save-btn');
+        const shareBtn = card.querySelector('.share-btn');
+        if (likeBtn) likeBtn.addEventListener('click', (e) => { e.stopPropagation(); window.toggleLike(img.id); });
+        if (saveBtn) saveBtn.addEventListener('click', (e) => { e.stopPropagation(); window.saveImage(img); });
+        if (shareBtn) shareBtn.addEventListener('click', (e) => { e.stopPropagation(); window.shareImage(img); });
 
         const imgEl = card.querySelector('.image-card-img');
         imgEl.addEventListener('load', () => {
@@ -312,8 +340,15 @@
             observer.unobserve(entry.target);
           }
         });
-      }, { threshold: 0.3 });
-      document.querySelectorAll('.image-card').forEach(card => observer.observe(card));
+      }, { threshold: 0.05, rootMargin: '0px 0px -20px 0px' });
+      document.querySelectorAll('.image-card').forEach(card => {
+        observer.observe(card);
+        // 已经在视口内的卡片立即唤醒,避免 threshold 导致卡片不可见
+        const rect = card.getBoundingClientRect();
+        if (rect.top < window.innerHeight && rect.bottom > 0) {
+          card.classList.add('awakened');
+        }
+      });
     }
 
     /* ============================

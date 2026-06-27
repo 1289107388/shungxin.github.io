@@ -16,7 +16,7 @@
   <meta name="twitter:title" content="双薪写真画廊">
   <meta name="twitter:description" content="记录美好瞬间，定格珍贵回忆">
   <meta name="twitter:image" content="https://shungxin.github.io/images/1782210152459.png">
-  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="css/styles.css">
 </head>
 <body>
 
@@ -84,7 +84,7 @@
       <div class="gallery-filters">
         <button class="filter-btn active" data-filter="all">全部</button>
         <button class="filter-btn" data-filter="landscape">风景</button>
-        <button class="filter-btn" data-filter="urban">城市</button>
+        <button class="filter-btn" data-filter="city">城市</button>
         <button class="filter-btn" data-filter="portrait">人像</button>
         <button class="filter-btn" data-filter="nature">自然</button>
       </div>
@@ -304,7 +304,7 @@
       <svg viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z" fill="#E8E8EC"/></svg>
       <span class="player-list-count" id="playerListCount">0</span>
     </button>
-    <span class="player-error-msg" id="playerErrorMsg">⚠ 音源加载失败，请确认 audio/ 目录下存在音频文件</span>
+    <span class="player-error-msg" id="playerErrorMsg">⚠ 音源加载失败，请确认 assets/audio/ 目录下存在音频文件</span>
 
     <!-- 播放列表面板 -->
     <div class="player-playlist" id="playerPlaylist" hidden>
@@ -335,28 +335,28 @@
 
   <!-- 配置中心:所有 API 地址、常量、配置项的唯一来源 -->
   <!-- 必须在所有业务 JS 之前加载 -->
-  <script src="config.js"></script>
-  <script src="utils.js"></script>
-  <script src="eventBus.js"></script>
+  <script src="js/config.js"></script>
+  <script src="js/utils.js"></script>
+  <script src="js/eventBus.js"></script>
 
   <!-- 画廊模块 -->
-  <script src="gallery.js"></script>
+  <script src="js/gallery.js"></script>
   <!-- 导航和 Toast -->
-  <script src="nav.js"></script>
+  <script src="js/nav.js"></script>
   <!-- 主题切换 -->
-  <script src="theme.js"></script>
+  <script src="js/theme.js"></script>
   <!-- 粒子背景 -->
-  <script src="particles.js"></script>
+  <script src="js/particles.js"></script>
   <!-- 图片查看器 -->
-  <script src="lightbox.js"></script>
+  <script src="js/lightbox.js"></script>
   <!-- 音乐播放器 -->
-  <script src="musicPlayer.js"></script>
+  <script src="js/musicPlayer.js"></script>
   <!-- 评论系统 -->
-  <script src="comments.js"></script>
+  <script src="js/comments.js"></script>
   <!-- Supabase API -->
-  <script src="api.js"></script>
+  <script src="js/api.js"></script>
   <!-- 认证系统 -->
-  <script src="auth.js"></script>
+  <script src="js/auth.js"></script>
 
   <!-- 用户上传图片模态框 -->
   <div id="uploadModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);backdrop-filter:blur(4px);z-index:10000;align-items:center;justify-content:center;">
@@ -405,7 +405,7 @@
     </div>
   </div>
   <!-- 图片上传 -->
-  <script src="upload.js"></script>
+  <script src="js/upload.js"></script>
 
 </body>
 </html>

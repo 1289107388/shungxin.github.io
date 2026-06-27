@@ -265,4 +265,30 @@
   };
 
   global.Utils = Utils;
+
+  // 抑制已知第三方扩展/子模块抛出的非关键错误，避免污染控制台
+  // 注意：仅过滤消息匹配的白名单，项目自身代码的错误仍会正常上报
+  const KNOWN_NOISE_ERRORS = [
+    /getThemeColors/i,
+    /themeColors/i,
+    /exportedColors/i,
+  ];
+  function isKnownNoiseError(message) {
+    if (!message) return false;
+    return KNOWN_NOISE_ERRORS.some(re => re.test(String(message)));
+  }
+  window.addEventListener('error', function (e) {
+    if (isKnownNoiseError(e.message)) {
+      e.preventDefault();
+      console.warn('[suppressed known noise error]', e.message);
+      return;
+    }
+  });
+  window.addEventListener('unhandledrejection', function (e) {
+    const msg = e.reason && (e.reason.message || e.reason);
+    if (isKnownNoiseError(msg)) {
+      e.preventDefault();
+      console.warn('[suppressed known noise rejection]', msg);
+    }
+  });
 })(window);

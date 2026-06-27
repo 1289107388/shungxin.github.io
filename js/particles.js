@@ -1,11 +1,13 @@
-﻿(function(global) {
+(function(global) {
   'use strict';
 
     /* ============================
        Enhanced Particle System
        ============================ */
     const pCanvas = document.getElementById('particle-canvas');
+    if (!pCanvas || !pCanvas.getContext) return;
     const pCtx = pCanvas.getContext('2d');
+    if (!pCtx) return;
     let particles = [];
     let mouseX = -1000, mouseY = -1000;
     let particleCount = 80;

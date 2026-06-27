@@ -23,6 +23,14 @@
         currentSubtitle: 'GitHub Discussions · 真实模式',
       };
 
+      // === 工具函数 ===
+      function isAbortError(err) {
+        if (!err) return false;
+        if (err.name === 'AbortError') return true;
+        const msg = String(err.message || err).toLowerCase();
+        return msg.includes('aborted') || msg.includes('abort') || msg.includes('cancel');
+      }
+
       // === 检测是否已配置 ===
       const isConfigured =
         GISCUS_CONFIG.repoId && !GISCUS_CONFIG.repoId.includes('xxxxx') &&
@@ -114,7 +122,7 @@
             updateLightboxCommentCount(total);
           }
         } catch (e) {
-          console.warn('刷新 lightbox 评论数失败:', e.message);
+          if (!isAbortError(e)) console.warn('刷新 lightbox 评论数失败:', e.message);
           // 失败时不要覆盖显示 0，避免把已有评论的图片误显示为 0
         }
       }
@@ -124,8 +132,8 @@
       window.refreshLightboxCommentCount = refreshLightboxCommentCount;
 
       // === 自建评论系统：从 Supabase 加载 ===
-      // 调试开关：默认开启。如果要关闭，在控制台执行 window.__commentApiDebug = false
-      window.__commentApiDebug = true;
+      // 调试开关：本地调试可设为 true，生产环境保持 false
+      window.__commentApiDebug = false;
       let currentCommentsPage = 1;
       let currentCommentsSort = 'newest';
       let currentImageId = null;
@@ -178,10 +186,11 @@
       // 通用 fetch 包装：调用 comment-api
       async function callCommentApi(path, init) {
         const url = window.SUPABASE_CONFIG.url + '/functions/v1/comment-api/' + path;
-        // 构建 headers: apikey 始终传; Authorization 只在有用户 token 时传
+        // 构建 headers: apikey 始终传; Authorization 优先用用户 token,未登录则用 anonKey
         const headers = {
           'apikey': window.SUPABASE_CONFIG.anonKey,
           'Content-Type': 'application/json',
+          'Authorization': 'Bearer ' + window.SUPABASE_CONFIG.anonKey,
         };
         const userToken = localStorage.getItem('shungxin_auth_token');
         if (userToken) {
@@ -265,8 +274,8 @@
             });
           } catch (_) { /* ignore */ }
         } catch (e) {
-          // 过期请求的失败也不显示,避免闪烁
-          if (myReqId !== commentsReqSeq) return;
+          // 过期请求或主动取消的失败不显示,避免闪烁
+          if (myReqId !== commentsReqSeq || isAbortError(e)) return;
           console.warn('加载评论失败:', e.message);
           body.innerHTML = '<div class="comments-empty"><div class="comments-empty-icon">💬</div><div class="comments-empty-title">暂无评论</div><div class="comments-empty-desc">成为第一个评论的人吧！</div></div>';
           // 修复: 失败时不要抹零已有评论数,只在该 imageId 还没缓存时才记 0
@@ -469,7 +478,6 @@
             const replyTo = btn.dataset.username || '';
             // 锁定 imageId：防止闭包读到过时的 currentImageId
             const imageId = parseInt(btn.dataset.imageId, 10) || currentImageId;
-            console.log('[reply-btn] click: parentId=' + parentId + ', replyTo=' + replyTo + ', btnImageId=' + btn.dataset.imageId + ', currentImageId=' + currentImageId + ', using imageId=' + imageId);
             showReplyForm(parentId, replyTo, imageId);
           });
         });
@@ -521,6 +529,10 @@
           // 用服务端返回的真实数量校正
           if (countEl && typeof data.data?.count === 'number') countEl.textContent = data.data.count;
         } catch (err) {
+          if (isAbortError(err)) {
+            btn.disabled = false;
+            return;
+          }
           console.warn('评论点赞失败:', err);
           // 回滚乐观更新
           if (liked) {
@@ -572,8 +584,12 @@
             replyCache[parentId] = { items, expanded: true, lastCount: items.length };
             renderReplyList(parentId, items);
           } catch (e) {
-            listEl.innerHTML = '<div class="comment-reply-empty">回复加载失败</div>';
-            console.warn(e);
+            if (isAbortError(e)) {
+              listEl.innerHTML = '';
+            } else {
+              listEl.innerHTML = '<div class="comment-reply-empty">回复加载失败</div>';
+              console.warn(e);
+            }
           }
         } else {
           cache.expanded = true;
@@ -702,8 +718,8 @@
 
         try {
           const auth = window.auth || {};
-          const authedUser = auth.isLoggedIn ? auth.getUser() : null;
-          const authedToken = auth.getToken ? auth.getToken() : null;
+          const authedUser = (typeof auth.isLoggedIn === 'function' && auth.isLoggedIn()) ? auth.getUser() : null;
+          const authedToken = (typeof auth.getToken === 'function') ? auth.getToken() : null;
           const username = authedUser ? (authedUser.display_name || authedUser.username) : getCurrentDisplayName();
 
           const payload = {
@@ -715,13 +731,11 @@
           };
           if (authedToken) payload.user_token = authedToken;
 
-          console.log('[submitReply] payload:', payload);
           const resp = await callCommentApi('create', {
             method: 'POST',
             body: JSON.stringify(payload),
           });
           const data = await resp.json().catch(() => ({}));
-          console.log('[submitReply] response:', resp.status, data);
           if (!resp.ok || data.success === false) {
             // 把后端 body 完整回显，方便排查
             let detail = data.error || 'HTTP ' + resp.status;
@@ -776,8 +790,10 @@
             }
           }
         } catch (e) {
-          console.error('回复失败:', e);
-          showToast('回复失败：' + (e.message || '网络错误'));
+          if (!isAbortError(e)) {
+            console.error('回复失败:', e);
+            showToast('回复失败：' + (e.message || '网络错误'));
+          }
           if (sendBtn) sendBtn.disabled = false;
         }
       }
@@ -821,8 +837,8 @@
 
         try {
           const auth = window.auth || {};
-          const authedUser = auth.isLoggedIn ? auth.getUser() : null;
-          const authedToken = auth.getToken ? auth.getToken() : null;
+          const authedUser = (typeof auth.isLoggedIn === 'function' && auth.isLoggedIn()) ? auth.getUser() : null;
+          const authedToken = (typeof auth.getToken === 'function') ? auth.getToken() : null;
           const username = authedUser
             ? (authedUser.display_name || authedUser.username)
             : getCurrentDisplayName();
@@ -839,7 +855,6 @@
             body: JSON.stringify(bodyPayload),
           });
           const data = await resp.json().catch(() => ({}));
-          console.log('[submitComment] response:', resp.status, data);
           if (!resp.ok || data.success === false) {
             throw new Error(data.error || 'HTTP ' + resp.status);
           }
@@ -855,8 +870,10 @@
             });
           } catch (_) { /* ignore */ }
         } catch (e) {
-          console.error('评论提交失败:', e.message);
-          showToast('评论提交失败: ' + e.message);
+          if (!isAbortError(e)) {
+            console.error('评论提交失败:', e.message);
+            showToast('评论提交失败: ' + e.message);
+          }
         } finally {
           btn.disabled = false;
           btn.textContent = originalText;
@@ -1044,10 +1061,6 @@
         for (let i = 2; i < lines.length; i++) console.log(lines[i]);
         return { isConfigured, repo: GISCUS_CONFIG.repo, base: COMMENTS_BASE };
       };
-      // 首次加载时自动打印
-      if (typeof console !== 'undefined' && console.log) {
-        setTimeout(() => { try { window.StellarCommentsCheck(); } catch (e) {} }, 1000);
-      }
 
       window.StellarComments = { state, showCommentsFor, isConfigured };
       window.showCommentsFor = showCommentsFor;

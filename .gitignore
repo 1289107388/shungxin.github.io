@@ -1,7 +1,7 @@
 .workbuddy/
 DESIGN.md
 *.flac
-supabase.min.js
+lib/supabase.min.js
 supabase/.temp/
 node_modules/
 *.log

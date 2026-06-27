@@ -240,6 +240,31 @@
       column-count: 2; column-gap: var(--space-lg);
     }
 
+    /* 空态提示：CSS columns 布局下需要跨列展示，避免被拆到某一列或被 column-break 截断 */
+    .gallery-empty {
+      display: block;
+      width: 100%;
+      column-span: all;
+      -webkit-column-span: all;
+      break-inside: avoid;
+      text-align: center;
+      padding: var(--space-3xl) var(--space-xl);
+      color: var(--color-gray-400);
+    }
+    .gallery-empty svg {
+      margin-bottom: var(--space-md);
+      opacity: 0.5;
+    }
+    .gallery-empty-title {
+      font-size: 18px;
+      font-weight: 600;
+      color: var(--color-gray-200);
+      margin-bottom: var(--space-sm);
+    }
+    .gallery-empty-desc {
+      font-size: 14px;
+    }
+
     /* ============================
        Image Card — Masonry + 3D Tilt + Glow Border
        ============================ */
@@ -256,18 +281,15 @@
       margin-bottom: var(--space-lg);
       display: inline-block;
       width: 100%;
-      /* grayscale awakening — initial state */
-      opacity: 0;
-      transform: translateY(30px);
-      transition: opacity 800ms var(--ease-stellar) 100ms,
-                  transform 800ms var(--ease-stellar) 100ms,
-                  border-color 300ms var(--ease-stellar),
+      /* 默认可见; .awakened 控制灰度->彩色,避免 transition 未运行/observer 未触发时卡片消失 */
+      opacity: 1;
+      transform: translateY(0);
+      transition: border-color 300ms var(--ease-stellar),
                   box-shadow 300ms var(--ease-stellar);
       /* 3D perspective for tilt */
       perspective: 1200px;
       perspective-origin: center center;
     }
-    .image-card.awakened { opacity: 1; transform: translateY(0); }
 
     /* Glow border — radial gradient positioned via JS on mousemove */
     .image-card .glow-border {
@@ -282,7 +304,7 @@
       transition: opacity 300ms var(--ease-stellar);
     }
     @media (hover: hover) {
-      .image-card.awakened:hover .glow-border { opacity: 1; }
+      .image-card:hover .glow-border { opacity: 1; }
     }
 
     /* 3D tilt wrapper for image */
@@ -294,12 +316,12 @@
       will-change: transform;
     }
 
-    .image-card.awakened:hover {
+    .image-card:hover {
       border-color: var(--color-border-glow);
       box-shadow: var(--shadow-card-hover);
     }
     @media (hover: hover) {
-      .image-card.awakened:hover { transform: translateY(-4px); }
+      .image-card:hover { transform: translateY(-4px); }
     }
 
     .image-card-img {
@@ -396,7 +418,8 @@
       background: rgba(12, 12, 20, 0.96);
       backdrop-filter: blur(40px); -webkit-backdrop-filter: blur(40px);
       display: flex; align-items: center; justify-content: center;
-      animation: lightbox-in 300ms var(--ease-stellar);
+      opacity: 1;
+      animation: lightbox-scale 300ms var(--ease-stellar);
       overflow: hidden;
     }
     .lightbox-overlay.hidden { display: none; }
@@ -405,13 +428,15 @@
       background: rgba(12, 12, 20, 0.85);
       backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
       display: flex; align-items: center; justify-content: center;
+      opacity: 1;
       overflow: hidden;
-      animation: lightbox-in 300ms var(--ease-stellar);
+      animation: modal-scale 300ms var(--ease-stellar);
     }
     .modal-overlay.hidden { display: none !important; }
     .hidden { display: none !important; }
     [hidden] { display: none !important; }
-    @keyframes lightbox-in { from { opacity: 0; } to { opacity: 1; } }
+    @keyframes lightbox-scale { from { transform: scale(0.98); } to { transform: scale(1); } }
+    @keyframes modal-scale { from { transform: scale(0.96); } to { transform: scale(1); } }
 
     /* ============================
        Auth Modal / User Menu
@@ -464,9 +489,10 @@
       position: relative; width: min(420px, calc(100vw - 32px));
       background: var(--color-bg-card); border: 1px solid var(--color-border-strong);
       border-radius: 20px; padding: 28px; box-shadow: var(--shadow-lightbox);
-      animation: modal-in 300ms var(--ease-stellar);
+      opacity: 1;
+      animation: modal-card-scale 300ms var(--ease-stellar);
     }
-    @keyframes modal-in { from { opacity: 0; transform: scale(0.96); } to { opacity: 1; transform: scale(1); } }
+    @keyframes modal-card-scale { from { transform: scale(0.96); } to { transform: scale(1); } }
     .modal-close {
       position: absolute; top: 16px; right: 16px; z-index: 2;
       width: 32px; height: 32px; border-radius: 50%;
@@ -594,6 +620,12 @@
     .toast-container { position: fixed; bottom: var(--space-2xl); right: var(--space-xl); z-index: 300; display: flex; flex-direction: column; gap: var(--space-sm); }
     .toast { background: var(--color-bg-card); border: 1px solid var(--color-border-default); border-radius: 12px; padding: var(--space-md) var(--space-lg); color: var(--color-gray-100); font-size: 14px; font-weight: 500; backdrop-filter: blur(12px); animation: toast-in 300ms var(--ease-stellar); display: flex; align-items: center; gap: var(--space-sm); }
     .toast .toast-icon { color: var(--color-success); font-size: 16px; }
+    .toast.toast-info { border-color: rgba(91, 140, 186, 0.4); }
+    .toast.toast-info .toast-icon { color: var(--color-info, #5b8cba); }
+    .toast.toast-error { border-color: rgba(239, 68, 68, 0.4); }
+    .toast.toast-error .toast-icon { color: var(--color-error); }
+    .toast.toast-warning { border-color: rgba(251, 191, 36, 0.4); }
+    .toast.toast-warning .toast-icon { color: var(--color-warning); }
     @keyframes toast-in { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
 
     /* ============================
@@ -1214,4 +1246,18 @@
       .comments-drawer { width: 100vw; }
       .comments-drawer-header, .comments-drawer-body, .comments-composer { padding-left: var(--space-md); padding-right: var(--space-md); }
       .comments-crossorigin-banner { margin-left: var(--space-md); margin-right: var(--space-md); }
+    }
+
+    /* ============================
+       Accessibility / reduced motion
+       ============================ */
+    /* 当用户偏好减少动画,或浏览器暂停动画(如 headless 预览)时,
+       强制瞬间完成过渡/动画,避免依赖 JS class/transition 的元素不可见 */
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+      }
     }

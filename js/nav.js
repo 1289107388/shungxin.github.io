@@ -1,14 +1,17 @@
-﻿(function(global) {
+(function(global) {
   'use strict';
 
     /* ============================
        Toast
        ============================ */
-    function showToast(message) {
+    function showToast(message, type) {
       const container = document.getElementById('toastContainer');
+      if (!container) return;
+      const icons = { success: '✓', info: 'ℹ', error: '✕', warning: '!' };
+      const icon = icons[type] || icons.success;
       const toast = document.createElement('div');
-      toast.className = 'toast';
-      toast.innerHTML = `<span class="toast-icon">✓</span> ${message}`;
+      toast.className = 'toast' + (type ? ' toast-' + type : '');
+      toast.innerHTML = `<span class="toast-icon">${icon}</span> ${message}`;
       container.appendChild(toast);
       setTimeout(() => {
         toast.style.opacity = '0'; toast.style.transform = 'translateY(10px)';
@@ -59,8 +62,8 @@
     /* ============================
        Mobile Nav
        ============================ */
-    document.getElementById('navHamburger').addEventListener('click', () => { document.getElementById('mobileNav').classList.add('open'); });
-    document.getElementById('mobileNavClose').addEventListener('click', () => { document.getElementById('mobileNav').classList.remove('open'); });
+    document.getElementById('navHamburger')?.addEventListener('click', () => { document.getElementById('mobileNav')?.classList.add('open'); });
+    document.getElementById('mobileNavClose')?.addEventListener('click', () => { document.getElementById('mobileNav')?.classList.remove('open'); });
     document.querySelectorAll('#mobileNav a').forEach(link => {
       link.addEventListener('click', () => {
         const sectionId = link.dataset.section;
@@ -84,8 +87,10 @@
        Scroll Progress
        ============================ */
     window.addEventListener('scroll', () => {
-      const pct = (window.scrollY / (document.documentElement.scrollHeight - window.innerHeight)) * 100;
-      document.getElementById('scrollProgress').style.width = pct + '%';
+      const scrollable = document.documentElement.scrollHeight - window.innerHeight;
+      const pct = scrollable > 0 ? (window.scrollY / scrollable) * 100 : 0;
+      const bar = document.getElementById('scrollProgress');
+      if (bar) bar.style.width = pct + '%';
     });
 
     /* ============================

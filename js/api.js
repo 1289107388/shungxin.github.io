@@ -9,15 +9,24 @@
     : (global.SUPABASE_CONFIG || { url: 'https://qlhfyawbyedhqokivezn.supabase.co', anonKey: '' });
   const SUPABASE_CONFIG = global.SUPABASE_CONFIG;
 
-  // 通用 Edge Function 调用（纯 fetch，不依赖 SDK）
+  // 判断是否为请求被中止/取消的错误（页面卸载、AbortController、用户中断）
+  function isAbortError(err) {
+    if (!err) return false;
+    if (err.name === 'AbortError') return true;
+    const msg = String(err.message || err).toLowerCase();
+    return msg.includes('aborted') || msg.includes('abort') || msg.includes('cancel');
+  }
+
+  // 通用 Edge Function 调用（纯 fetch，不依赖 SDK；带超时和 abort 静默处理）
   global.supabaseInvoke = async function(functionName, body) {
     const url = SUPABASE_CONFIG.url + '/functions/v1/' + functionName;
     console.log('[supabaseInvoke] POST', url, body);
     
-    // 构建 headers: apikey 始终传; Authorization 只在有用户 token 时传
+    // 构建 headers: apikey 始终传; Authorization 优先用用户 token,未登录则用 anonKey
     const headers = {
       'Content-Type': 'application/json',
       'apikey': SUPABASE_CONFIG.anonKey,
+      'Authorization': 'Bearer ' + SUPABASE_CONFIG.anonKey,
     };
     // 尝试从 localStorage 读取用户 token(兼容 auth 模块的 key)
     const userToken = localStorage.getItem('shungxin_auth_token');
@@ -33,6 +42,10 @@
         body: JSON.stringify(body || {}),
       });
     } catch (networkErr) {
+      if (isAbortError(networkErr)) {
+        console.warn('[supabaseInvoke] 请求已取消:', functionName);
+        throw new Error('请求已取消');
+      }
       console.error('[supabaseInvoke] 网络错误:', networkErr.message, networkErr);
       throw new Error('网络错误: ' + networkErr.message);
     }
@@ -45,8 +58,6 @@
     return await resp.json();
   };
 
-  // 不再需要 SDK，但为了向后兼容提供 mock
-  const supabaseClient = { functions: { invoke: global.supabaseInvoke } };
   const supabaseReady = SUPABASE_CONFIG.url !== 'YOUR_SUPABASE_URL' && SUPABASE_CONFIG.anonKey !== 'YOUR_SUPABASE_ANON_KEY';
 
   // 获取当前登录用户 ID；未登录返回 null
@@ -77,7 +88,10 @@
     } else {
       try {
         // 通过 Edge Function 获取（前端禁止直连数据库）
-        const likeHeaders = { 'apikey': global.SUPABASE_CONFIG.anonKey };
+        const likeHeaders = {
+          'apikey': global.SUPABASE_CONFIG.anonKey,
+          'Authorization': 'Bearer ' + global.SUPABASE_CONFIG.anonKey,
+        };
         const userToken = localStorage.getItem('shungxin_auth_token');
         if (userToken) likeHeaders['Authorization'] = 'Bearer ' + userToken;
         const resp = await fetch(
@@ -89,15 +103,13 @@
           Object.assign(counts, result.data);
         }
       } catch (e) {
-        console.warn('获取点赞数失败:', e.message);
+        if (!isAbortError(e)) console.warn('获取点赞数失败:', e.message);
       }
     }
     return counts;
   }
 
   // === 点赞/取消点赞（通过 Edge Function 安全执行） ===
-  const LIKE_API_URL = SUPABASE_CONFIG.url + '/functions/v1/like-toggle';
-
   async function toggleLike(imageId) {
     const btn = document.querySelector(`.like-btn[data-id="${imageId}"]`);
     const countEl = document.querySelector(`.like-count[data-id="${imageId}"]`);
@@ -173,6 +185,11 @@
       } catch (_) { /* ignore */ }
     } catch (e) {
       console.error('点赞操作失败:', e.message);
+      // 请求被主动取消时不做离线回退，避免误导用户
+      if (isAbortError(e)) {
+        if (typeof global.showToast === 'function') global.showToast('操作已取消');
+        return;
+      }
       // 回退到乐观更新
       if (isLiked) {
         localLikes[imageId] = false;
@@ -218,7 +235,7 @@
         return result.data;
       }
     } catch (e) {
-      console.warn('获取我的点赞失败:', e.message);
+      if (!isAbortError(e)) console.warn('获取我的点赞失败:', e.message);
     }
     return [];
   }
@@ -281,7 +298,10 @@
       } else {
         try {
           // 通过 Edge Function 获取（前端禁止直连数据库）
-          const viewListHeaders = { 'apikey': global.SUPABASE_CONFIG.anonKey };
+          const viewListHeaders = {
+            'apikey': global.SUPABASE_CONFIG.anonKey,
+            'Authorization': 'Bearer ' + global.SUPABASE_CONFIG.anonKey,
+          };
           const userToken = localStorage.getItem('shungxin_auth_token');
           if (userToken) viewListHeaders['Authorization'] = 'Bearer ' + userToken;
           const resp = await fetch(
@@ -293,7 +313,7 @@
             Object.assign(counts, result.data);
           }
         } catch (e) {
-          console.warn('获取浏览量失败:', e.message);
+          if (!isAbortError(e)) console.warn('获取浏览量失败:', e.message);
         }
       }
       return counts;
@@ -346,7 +366,7 @@
           } catch (_) { /* ignore */ }
         }
       } catch (e) {
-        console.warn('浏览量增加失败:', e.message);
+        if (!isAbortError(e)) console.warn('浏览量增加失败:', e.message);
       }
     }
 
@@ -356,29 +376,30 @@
       if (!card) return;
 
       let badge = card.querySelector('.view-count-badge');
-      if (count > 0) {
-        if (!badge) {
-          badge = document.createElement('div');
-          badge.className = 'view-count-badge';
-          badge.innerHTML = `
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-            <span class="view-count-number">${count}</span>
-          `;
-          const inner = card.querySelector('.image-card-inner');
-          const img = inner ? inner.querySelector('.image-card-img') : null;
-          // P0 修复: view-count-badge 实际渲染在 .image-card-inner 内,不是 .image-card
-          // insertBefore 当 nextSibling 不属于同一父节点时会抛 NotFoundError
-          if (inner && img) {
-            if (img.nextSibling) {
-              inner.insertBefore(badge, img.nextSibling);
-            } else {
-              inner.appendChild(badge);
-            }
+      const safeCount = parseInt(count, 10) || 0;
+      if (safeCount <= 0) {
+        if (badge) badge.remove();
+        return;
+      }
+      if (!badge) {
+        badge = document.createElement('div');
+        badge.className = 'view-count-badge';
+        badge.innerHTML = `
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+          <span class="view-count-number">${safeCount}</span>
+        `;
+        const inner = card.querySelector('.image-card-inner');
+        const img = inner ? inner.querySelector('.image-card-img') : null;
+        if (inner && img) {
+          if (img.nextSibling) {
+            inner.insertBefore(badge, img.nextSibling);
+          } else {
+            inner.appendChild(badge);
           }
-        } else {
-          const numSpan = badge.querySelector('.view-count-number');
-          if (numSpan) numSpan.textContent = count;
         }
+      } else {
+        const numSpan = badge.querySelector('.view-count-number');
+        if (numSpan) numSpan.textContent = safeCount;
       }
     }
 
@@ -393,9 +414,6 @@
           updateViewCountBadge(parseInt(imageId), count);
         }
       });
-
-      // 暴露到全局
-      global.viewCountsData = global.viewCountsData || {};
 
       // P1 阶段 C-1: 一次性广播所有浏览量, 监听者能预热
       try {

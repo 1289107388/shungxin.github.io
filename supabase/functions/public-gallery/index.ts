@@ -87,7 +87,7 @@ Deno.serve(async (req) => {
         // 新图(有 storage_path)用 Supabase Storage public URL
         src: img.storage_path
           ? `${SUPABASE_URL}/storage/v1/object/public/${img.storage_bucket || 'gallery-images'}/${img.storage_path}`
-          : 'images/' + img.filename,
+          : 'assets/images/' + img.filename,
         is_local: !img.storage_path,           // 标记: 老图 = 走主站静态资源
       }));
       return cors({ success: true, data: { images: enriched } });
@@ -106,7 +106,7 @@ Deno.serve(async (req) => {
       if (!data) return cors({ error: '图片不存在或不可见' }, 404);
       const src = data.storage_path
         ? `${SUPABASE_URL}/storage/v1/object/public/${data.storage_bucket || 'gallery-images'}/${data.storage_path}`
-        : 'images/' + data.filename;
+        : 'assets/images/' + data.filename;
       return cors({ success: true, data: { ...data, src } });
     }
 

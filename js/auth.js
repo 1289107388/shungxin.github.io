@@ -7,7 +7,7 @@
   const CFG = (global.AppConfig && global.AppConfig.SUPABASE) || global.SUPABASE_CONFIG || {};
   const SK = (global.AppConfig && global.AppConfig.STORAGE_KEYS) || {};
   const SUPABASE_URL = CFG.url || 'https://qlhfyawbyedhqokivezn.supabase.co';
-  const ANON_KEY = CFG.anonKey || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFsaGZ5YXdieWVkaHFva2l2ZXpuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODIyODUyNTUsImV4cCI6MjA5Nzg2MTI1NX0.uJF2_JLDl2cDruSYeHAg4r6ZxZRbsgqhW_xfZ3YZ_Kk';
+  const ANON_KEY = CFG.anonKey || '';
   const TOKEN_KEY = SK.authToken || 'shungxin_auth_token';
   const USER_KEY = SK.authUser || 'shungxin_auth_user';
   const EXPIRES_KEY = (SK.authToken || 'shungxin_auth_token') + '_expires';
@@ -194,6 +194,8 @@
     state.user = null; state.token = null;
     saveToStorage();
     renderAuthArea();
+    global.dispatchEvent(new CustomEvent('auth:logout'));
+    try { global.EventBus && global.EventBus.emit('auth:logout', { user: state.user }); } catch (_) {}
     return result;
   }
   async function fetchMe() {
@@ -283,7 +285,7 @@
         await doLogin(username, password);
         closeAuthModal();
         document.getElementById('loginPassword').value = '';
-        if (global.toast) global.toast('登录成功，欢迎 ' + (state.user.display_name || state.user.username), 'success');
+        if (global.showToast) global.showToast('登录成功，欢迎 ' + (state.user.display_name || state.user.username), 'success');
       } catch (err) {
         showError('loginForm', errId, err.message || '登录失败');
       } finally {
@@ -309,7 +311,7 @@
         closeAuthModal();
         document.getElementById('registerPassword').value = '';
         document.getElementById('registerPasswordConfirm').value = '';
-        if (global.toast) global.toast('注册成功！欢迎 ' + (state.user.display_name || state.user.username), 'success');
+        if (global.showToast) global.showToast('注册成功！欢迎 ' + (state.user.display_name || state.user.username), 'success');
       } catch (err) {
         showError('registerForm', errId, err.message || '注册失败');
       } finally {
@@ -345,7 +347,7 @@
     document.getElementById('userMenuProfile')?.addEventListener('click', () => {
       dropdown.hidden = true;
       if (state.user) {
-        if (global.toast) global.toast(`用户 #${state.user.id} · ${state.user.username}`, 'info');
+        if (global.showToast) global.showToast(`用户 #${state.user.id} · ${state.user.username}`, 'info');
       }
     });
     document.getElementById('userMenuChangePwd')?.addEventListener('click', () => {
@@ -356,7 +358,7 @@
       dropdown.hidden = true;
       if (!confirm('确定要退出登录吗？')) return;
       await doLogout();
-      if (global.toast) global.toast('已退出登录', 'info');
+      if (global.showToast) global.showToast('已退出登录', 'info');
     });
     document.getElementById('changePwdClose')?.addEventListener('click', closeChangePwdModal);
 
@@ -394,7 +396,7 @@
         await doChangePassword(oldPwd, newPwd);
         closeChangePwdModal();
         e.target.reset();
-        if (global.toast) global.toast('密码已更新，请重新登录', 'success');
+        if (global.showToast) global.showToast('密码已更新，请重新登录', 'success');
       } catch (err) {
         showError('changePwdForm', errId, err.message || '更新失败');
       } finally {

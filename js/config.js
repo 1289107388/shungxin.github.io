@@ -4,7 +4,7 @@
 // 修改这里就改了全站,不要在别处再硬编码同样的值
 //
 // 用法:
-//   <script src="config.js"></script>  <!-- 放在所有业务 JS 之前 -->
+//   <script src="js/config.js"></script>  <!-- 放在所有业务 JS 之前 -->
 //   业务代码用 window.AppConfig.xxx
 //
 // 维护规则:
@@ -43,10 +43,10 @@
       // 前端页面挂载在哪个 bucket(主站是 'site')
       siteBucket: 'site',
       // 音频文件(中文文件名 Supabase Storage 不支持,用英文名)
-      audioSrc: 'audio/feng-jaychou.mp3',
+      audioSrc: 'assets/audio/feng-jaychou.mp3',
       // 播放列表配置(可扩展多首,path 相对于站点根目录)
       PLAYLIST: [
-        { id: 'feng',   title: '枫',      artist: '周杰伦', path: 'audio/feng-jaychou.mp3' },
+        { id: 'feng',   title: '枫',      artist: '周杰伦', path: 'assets/audio/feng-jaychou.mp3' },
       ],
     },
 
@@ -114,7 +114,7 @@
 
     /**
      * 拼 Storage 公开访问 URL
-     * @param {string} filePath - 相对 bucket 根的路径,比如 'index.html' 或 'images/foo.png'
+     * @param {string} filePath - 相对 bucket 根的路径,比如 'index.html' 或 'assets/images/foo.png'
      * @returns {string}
      */
     getStorageUrl(filePath) {

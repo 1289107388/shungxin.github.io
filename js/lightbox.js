@@ -59,8 +59,10 @@
     });
 
     function openLightbox(index) {
+      if (!window.sortedImages || index < 0 || index >= window.sortedImages.length) return;
       currentLightboxIndex = index;
       const img = window.sortedImages[index];
+      if (!img) return;
       window.currentLightboxImageId = img.id;
       lightboxImg.src = img.src;
       lightbox.classList.remove('hidden');
@@ -315,7 +317,7 @@
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
-      showToast('图片已保存');
+      if (typeof global.showToast === 'function') global.showToast('图片已保存');
     }
 
     function shareImage(img) {

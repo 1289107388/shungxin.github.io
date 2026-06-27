@@ -241,6 +241,12 @@
       playNext();
     });
     bgAudio.addEventListener('error', function(e) {
+      const code = bgAudio.error && bgAudio.error.code;
+      // MEDIA_ERR_ABORTED (1) 常见于进度拖拽或浏览器取消 Range 请求，不一定是致命错误
+      if (code === 1) {
+        console.warn('Audio aborted (often caused by seeking on a server without Range support):', e);
+        return;
+      }
       console.warn('Audio source error:', e);
       playerErrorMsg.classList.add('visible');
       playerTime.textContent = '--:-- / --:--';
@@ -272,10 +278,7 @@
       playerProgressWrap.classList.remove('dragging');
       playerProgressWrap.releasePointerCapture(e.pointerId);
     });
-    // 保留 click 作为兜底
-    playerProgressWrap.addEventListener('click', function(e) {
-      seekTo(e.clientX);
-    });
+
 
     // 事件绑定: 音量
     volumeSlider.addEventListener('click', function(e) {

@@ -26,14 +26,17 @@
       anonKey: cfg.anonKey || '',
     };
   }
-  // 从 localStorage 拿 token (与主站 auth 模块约定一致)
+  // 从 localStorage 拿 token (与主站 auth 模块约定一致,优先读 AppConfig)
   function getToken() {
-    return localStorage.getItem('shungxin_auth_token') || '';
+    const key = (global.AppConfig && global.AppConfig.STORAGE_KEYS && global.AppConfig.STORAGE_KEYS.authToken)
+      || 'shungxin_auth_token';
+    return localStorage.getItem(key) || '';
   }
   function openModal() {
     const token = getToken();
     if (!token) {
-      alert('请先登录后再上传作品');
+      if (typeof global.showToast === 'function') global.showToast('请先登录后再上传作品', 'info');
+      if (global.auth && typeof global.auth.openLogin === 'function') global.auth.openLogin();
       return;
     }
     modal.style.display = 'flex';
@@ -123,14 +126,23 @@
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
     const f = fileInput.files[0];
-    if (!f) return alert('请选择文件');
-    if (f.size > 10 * 1024 * 1024) return alert('文件超过 10MB');
+    if (!f) {
+      if (typeof global.showToast === 'function') global.showToast('请选择文件', 'warning');
+      return;
+    }
+    if (f.size > 10 * 1024 * 1024) {
+      if (typeof global.showToast === 'function') global.showToast('文件超过 10MB', 'warning');
+      return;
+    }
 
     // ===== P0-1.3 魔数校验:读取文件头部 16 字节,验证真实文件类型 =====
     // 防止有人把 .exe 改后缀成 .jpg 上传
     const magicCheck = await verifyImageMagic(f);
     if (!magicCheck.ok) {
-      return alert('文件类型不安全: ' + magicCheck.reason + '\n支持的格式: JPG / PNG / WebP / GIF');
+      if (typeof global.showToast === 'function') {
+        global.showToast('文件类型不安全: ' + magicCheck.reason + ' (支持 JPG/PNG/WebP/GIF)', 'error');
+      }
+      return;
     }
 
     const fd = new FormData();
@@ -176,7 +188,7 @@
         setTimeout(() => {
           closeModal();
           // 如果主站有 toast 系统,触发一下;否则用 alert
-          if (global.sxToast) global.sxToast('作品已上传,等待管理员审核', 'success');
+          if (global.showToast) global.showToast('作品已上传,等待管理员审核', 'success');
         }, 1500);
       } else {
         document.getElementById('uploadStatus2').textContent = '❌ ' + (res.error || ('HTTP ' + xhr.status));
@@ -202,7 +214,7 @@
       });
       // 同时显示在页面上
       const detail = '状态: ' + xhr.status + ' · readyState: ' + xhr.readyState + ' · 协议: ' + location.protocol;
-      if (global.sxToast) global.sxToast(msg + ' · ' + detail, 'error');
+      if (global.showToast) global.showToast(msg + ' · ' + detail, 'error');
     };
     xhr.ontimeout = () => {
       document.getElementById('uploadStatus2').textContent = '❌ 上传超时,请重试或换更小的图';
