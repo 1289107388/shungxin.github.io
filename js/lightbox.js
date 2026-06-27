@@ -8,6 +8,9 @@
     const lightboxImg = document.getElementById('lightboxImg');
     const lightboxContainer = document.getElementById('lightboxContainer');
     const lightboxZoomHint = document.getElementById('lightboxZoomHint');
+    const lightboxTitle = document.getElementById('lightboxTitle');
+    const lightboxAuthor = document.getElementById('lightboxAuthor');
+    const lightboxDesc = document.getElementById('lightboxDesc');
     let currentLightboxIndex = -1;
     let scale = 1, panX = 0, panY = 0;
     let isDragging = false, dragStartX = 0, dragStartY = 0;
@@ -58,6 +61,38 @@
       applyTransform();
     });
 
+    function updateLightboxInfo(img) {
+      if (lightboxTitle) {
+        lightboxTitle.textContent = img.title || '';
+        lightboxTitle.style.display = img.title ? 'block' : 'none';
+      }
+      if (lightboxDesc) {
+        lightboxDesc.textContent = img.description || '';
+        lightboxDesc.style.display = img.description ? 'block' : 'none';
+      }
+      if (lightboxAuthor) {
+        if (img.uploader || img.uploaded_by) {
+          lightboxAuthor.innerHTML = window.renderAuthorBadge
+            ? window.renderAuthorBadge(img.uploader, img.uploaded_by, 'lightbox')
+            : '';
+          lightboxAuthor.style.display = 'block';
+          const btn = lightboxAuthor.querySelector('.image-author');
+          if (btn) {
+            btn.addEventListener('click', (e) => {
+              e.stopPropagation();
+              const identifier = btn.dataset.username || btn.dataset.userId;
+              if (identifier && typeof window.openUserProfile === 'function') {
+                window.openUserProfile(identifier);
+              }
+            });
+          }
+        } else {
+          lightboxAuthor.innerHTML = '';
+          lightboxAuthor.style.display = 'none';
+        }
+      }
+    }
+
     function openLightbox(index) {
       if (!window.sortedImages || index < 0 || index >= window.sortedImages.length) return;
       currentLightboxIndex = index;
@@ -65,6 +100,7 @@
       if (!img) return;
       window.currentLightboxImageId = img.id;
       lightboxImg.src = img.src;
+      updateLightboxInfo(img);
       lightbox.classList.remove('hidden');
       document.body.style.overflow = 'hidden';
       resetZoom();
@@ -112,6 +148,7 @@
         window.currentLightboxImageId = img.id;
         lightboxImg.src = img.src;
         lightboxImg.style.opacity = '1';
+        updateLightboxInfo(img);
         if (newIndex + 1 < window.sortedImages.length) new Image().src = window.sortedImages[newIndex + 1].src;
         if (newIndex - 1 >= 0) new Image().src = window.sortedImages[newIndex - 1].src;
 

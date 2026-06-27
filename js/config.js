@@ -36,6 +36,7 @@
       uploadImage: 'upload-image',
       adminApi: 'admin-api',
       storageMonitor: 'storage-monitor',
+      paidAreaAuth: 'paid-area-auth',
     },
 
     // ==================== Storage(本地/Supabase Storage 资源) ====================
@@ -86,6 +87,7 @@
       authToken: 'shungxin_auth_token',
       authUser: 'shungxin_auth_user',
       visitorId: 'visitor_id',
+      paidAreaToken: 'shungxin_paid_area_token',
       // 兼容旧 key(密码保护时代留下来的,如已清理可删)
       legacyGalleryAccess: 'gallery_access',
     },

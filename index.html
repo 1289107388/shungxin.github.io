@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
@@ -29,6 +29,8 @@
     <div class="nav-logo">双薪写真<span style="color:var(--color-accent);">.</span></div>
     <ul class="nav-links">
       <li><a class="active" data-section="gallery">Gallery</a></li>
+      <li><a href="creators.html">Creators</a></li>
+      <li><a href="paid.html">免费区</a></li>
       <li><a data-section="footer">About</a></li>
       <li>
         <button class="nav-comments-link" id="navCommentsBtn" data-section="comments" aria-label="评论">
@@ -72,6 +74,8 @@
   <div class="mobile-nav-overlay" id="mobileNav">
     <button class="mobile-nav-close" id="mobileNavClose">✕</button>
     <a data-section="gallery">Gallery</a>
+    <a href="creators.html">Creators</a>
+    <a href="paid.html">free区</a>
     <a data-section="footer">About</a>
     <a data-section="comments" id="mobileNavComments">评论</a>
   </div>
@@ -183,6 +187,41 @@
     </div>
   </div>
 
+  <!-- 用户资料弹窗 -->
+  <div class="modal-overlay hidden" id="userProfileModal" role="dialog" aria-modal="true" aria-labelledby="profileName">
+    <div class="modal-card profile-modal-card">
+      <button class="modal-close" id="userProfileClose" type="button" aria-label="关闭">✕</button>
+      <div class="profile-header">
+        <div class="profile-avatar" id="profileAvatar">U</div>
+        <h2 class="profile-name" id="profileName">用户</h2>
+        <div class="profile-username" id="profileUsername">@user</div>
+        <p class="profile-bio" id="profileBio"></p>
+        <div class="profile-stats">
+          <div class="profile-stat">
+            <div class="profile-stat-value" id="profileWorks">0</div>
+            <div class="profile-stat-label">作品</div>
+          </div>
+          <div class="profile-stat">
+            <div class="profile-stat-value" id="profileLikes">0</div>
+            <div class="profile-stat-label">获赞</div>
+          </div>
+          <div class="profile-stat">
+            <div class="profile-stat-value" id="profileViews">0</div>
+            <div class="profile-stat-label">浏览</div>
+          </div>
+        </div>
+      </div>
+      <div class="profile-body">
+        <div class="profile-section-title">📷 作品</div>
+        <div class="profile-loading" id="profileLoading">
+          <div class="profile-loading-spinner"></div>
+          正在加载作品…
+        </div>
+        <div class="profile-grid" id="profileGrid"></div>
+      </div>
+    </div>
+  </div>
+
   <!-- Lightbox -->
   <div class="lightbox-overlay hidden" id="lightbox">
     <button class="lightbox-close" id="lightboxClose" aria-label="Close">✕</button>
@@ -190,6 +229,13 @@
     <button class="lightbox-arrow right" id="lightboxNext" aria-label="Next">›</button>
     <div class="lightbox-img-container" id="lightboxContainer">
       <img class="lightbox-img" id="lightboxImg" src="" alt="" draggable="false">
+    </div>
+    <div class="lightbox-info" id="lightboxInfo">
+      <div class="lightbox-info-main">
+        <h3 class="lightbox-title" id="lightboxTitle"></h3>
+        <div class="lightbox-author" id="lightboxAuthor"></div>
+      </div>
+      <p class="lightbox-desc" id="lightboxDesc"></p>
     </div>
     <div class="lightbox-zoom-hint" id="lightboxZoomHint">🖱️ 滚轮缩放 · 拖拽平移 · 双击复位</div>
     <div class="lightbox-toolbar">
@@ -357,6 +403,8 @@
   <script src="js/api.js"></script>
   <!-- 认证系统 -->
   <script src="js/auth.js"></script>
+  <!-- 用户资料弹窗 -->
+  <script src="js/userProfile.js"></script>
 
   <!-- 用户上传图片模态框 -->
   <div id="uploadModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);backdrop-filter:blur(4px);z-index:10000;align-items:center;justify-content:center;">

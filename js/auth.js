@@ -347,7 +347,12 @@
     document.getElementById('userMenuProfile')?.addEventListener('click', () => {
       dropdown.hidden = true;
       if (state.user) {
-        if (global.showToast) global.showToast(`用户 #${state.user.id} · ${state.user.username}`, 'info');
+        const identifier = state.user.username || String(state.user.id);
+        if (typeof global.openUserProfile === 'function') {
+          global.openUserProfile(identifier);
+        } else if (global.showToast) {
+          global.showToast(`用户 #${state.user.id} · ${state.user.username}`, 'info');
+        }
       }
     });
     document.getElementById('userMenuChangePwd')?.addEventListener('click', () => {

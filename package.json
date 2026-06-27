@@ -8,6 +8,7 @@
     "start:admin": "echo 打开 http://localhost:8080/admin.html"
   },
   "devDependencies": {
+    "bcryptjs": "^3.0.3",
     "http-server": "^14.1.1"
   }
 }

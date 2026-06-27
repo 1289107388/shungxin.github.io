@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>发现创作者 · 双薪写真画廊</title>
+  <meta name="description" content="发现双薪写真画廊中的优质创作者">
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+  <div class="scroll-progress" id="scrollProgress" style="width: 0%;"></div>
+  <canvas id="particle-canvas"></canvas>
+
+  <!-- Navigation -->
+  <nav class="top-nav" id="topNav">
+    <div class="nav-logo">双薪写真<span style="color:var(--color-accent);">.</span></div>
+    <ul class="nav-links">
+      <li><a href="index.html">Gallery</a></li>
+      <li><a class="active" href="creators.html">Creators</a></li>
+      <li><a href="paid.html">付费区</a></li>
+      <li><a href="index.html#footer">About</a></li>
+    </ul>
+    <div style="display:flex;align-items:center;gap:8px;">
+      <div id="authArea" class="auth-area" data-state="logged-out">
+        <button class="auth-btn" id="authLoginBtn" type="button">登录</button>
+        <button class="auth-btn auth-btn-primary" id="authRegisterBtn" type="button">注册</button>
+      </div>
+      <div id="userMenu" class="user-menu" hidden>
+        <button class="user-menu-trigger" id="userMenuTrigger" type="button" aria-haspopup="true" aria-expanded="false">
+          <span class="user-avatar" id="userAvatar">U</span>
+          <span class="user-name" id="userName">用户</span>
+          <span class="user-caret">▾</span>
+        </button>
+        <div class="user-menu-dropdown" id="userMenuDropdown" hidden>
+          <div class="user-menu-header">
+            <span class="user-name" id="userMenuName">用户</span>
+            <span class="user-role" id="userMenuRole">user</span>
+          </div>
+          <button type="button" class="user-menu-item" id="userMenuUpload">📷 上传作品</button>
+          <button type="button" class="user-menu-item" id="userMenuProfile">个人资料</button>
+          <button type="button" class="user-menu-item" id="userMenuChangePwd">修改密码</button>
+          <button type="button" class="user-menu-item user-menu-item-danger" id="userMenuLogout">退出登录</button>
+        </div>
+      </div>
+      <button class="theme-toggle" id="themeToggle" aria-label="切换主题" title="切换深色/浅色主题">
+        <svg class="moon-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+        <svg class="sun-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+      </button>
+      <button class="nav-hamburger" id="navHamburger" aria-label="Menu">☰</button>
+    </div>
+  </nav>
+
+  <div class="mobile-nav-overlay" id="mobileNav">
+    <button class="mobile-nav-close" id="mobileNavClose">✕</button>
+    <a href="index.html">Gallery</a>
+    <a href="creators.html">Creators</a>
+    <a href="paid.html">付费区</a>
+    <a href="index.html#footer">About</a>
+  </div>
+
+  <!-- Creators Hero -->
+  <section class="creators-hero">
+    <h1 class="creators-hero-title">发现优质创作者</h1>
+    <p class="creators-hero-subtitle">按作品数、获赞数、浏览量找到你感兴趣的摄影师</p>
+    <div class="creators-toolbar">
+      <div class="creators-search">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <input type="text" id="creatorsSearch" placeholder="搜索创作者用户名或昵称…" autocomplete="off">
+      </div>
+      <div class="creators-sort" id="creatorsSort">
+        <button class="creators-sort-btn active" data-sort="works">作品最多</button>
+        <button class="creators-sort-btn" data-sort="likes">获赞最多</button>
+        <button class="creators-sort-btn" data-sort="views">浏览最多</button>
+        <button class="creators-sort-btn" data-sort="recent">最新加入</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- Creators Grid -->
+  <section class="creators-grid" id="creatorsGrid">
+    <div class="profile-loading" style="grid-column:1 / -1;">
+      <div class="profile-loading-spinner"></div>
+      正在加载创作者…
+    </div>
+  </section>
+
+  <!-- Toast -->
+  <div class="toast-container" id="toastContainer"></div>
+
+  <!-- 认证模态框 -->
+  <div class="modal-overlay hidden" id="authModal" role="dialog" aria-modal="true" aria-labelledby="authModalTitle">
+    <div class="modal-card auth-modal-card">
+      <button class="modal-close" id="authModalClose" type="button" aria-label="关闭">✕</button>
+      <div class="auth-tabs" role="tablist">
+        <button class="auth-tab active" id="authTabLogin" type="button" role="tab" aria-selected="true">登录</button>
+        <button class="auth-tab" id="authTabRegister" type="button" role="tab" aria-selected="false">注册</button>
+      </div>
+      <form class="auth-form" id="loginForm" autocomplete="on">
+        <h2 class="auth-title" id="authModalTitle">登录账户</h2>
+        <label class="auth-field">
+          <span>用户名</span>
+          <input type="text" id="loginUsername" name="username" required minlength="3" maxlength="32" autocomplete="username" placeholder="3-32位字母/数字/_-./中文">
+        </label>
+        <label class="auth-field">
+          <span>密码</span>
+          <input type="password" id="loginPassword" name="password" required minlength="6" maxlength="128" autocomplete="current-password" placeholder="6位以上">
+        </label>
+        <div class="auth-error" id="loginError" hidden></div>
+        <button class="auth-submit" type="submit" id="loginSubmit">登 录</button>
+        <div class="auth-hint">还没有账号？<a href="#" id="gotoRegister">立即注册</a></div>
+      </form>
+      <form class="auth-form hidden" id="registerForm" autocomplete="on">
+        <h2 class="auth-title">创建账号</h2>
+        <label class="auth-field">
+          <span>用户名 <em class="field-hint">(3-32位，支持中英文/_-.)</em></span>
+          <input type="text" id="registerUsername" name="username" required minlength="3" maxlength="32" autocomplete="username" placeholder="字母/数字/下划线">
+        </label>
+        <label class="auth-field">
+          <span>显示名 <em class="field-hint">(可选,默认与用户名相同)</em></span>
+          <input type="text" id="registerDisplayName" name="display_name" maxlength="64" placeholder="如：星空摄影师">
+        </label>
+        <label class="auth-field">
+          <span>密码 <em class="field-hint">(至少6位)</em></span>
+          <input type="password" id="registerPassword" name="password" required minlength="6" maxlength="128" autocomplete="new-password" placeholder="6位以上">
+        </label>
+        <label class="auth-field">
+          <span>确认密码</span>
+          <input type="password" id="registerPasswordConfirm" required minlength="6" maxlength="128" autocomplete="new-password" placeholder="再输入一次">
+        </label>
+        <div class="auth-error" id="registerError" hidden></div>
+        <button class="auth-submit" type="submit" id="registerSubmit">注册并登录</button>
+        <div class="auth-hint">已有账号？<a href="#" id="gotoLogin">直接登录</a></div>
+      </form>
+    </div>
+  </div>
+
+  <!-- 修改密码模态框 -->
+  <div class="modal-overlay hidden" id="changePwdModal" role="dialog" aria-modal="true">
+    <div class="modal-card auth-modal-card">
+      <button class="modal-close" id="changePwdClose" type="button" aria-label="关闭">✕</button>
+      <h2 class="auth-title">修改密码</h2>
+      <form class="auth-form" id="changePwdForm">
+        <label class="auth-field">
+          <span>原密码</span>
+          <input type="password" id="oldPassword" required minlength="6" autocomplete="current-password">
+        </label>
+        <label class="auth-field">
+          <span>新密码 <em class="field-hint">(至少6位)</em></span>
+          <input type="password" id="newPassword" required minlength="6" autocomplete="new-password">
+        </label>
+        <label class="auth-field">
+          <span>确认新密码</span>
+          <input type="password" id="newPasswordConfirm" required minlength="6" autocomplete="new-password">
+        </label>
+        <div class="auth-error" id="changePwdError" hidden></div>
+        <button class="auth-submit" type="submit">更新密码</button>
+        <div class="auth-hint">修改密码后会自动退出所有设备,需重新登录</div>
+      </form>
+    </div>
+  </div>
+
+  <!-- 用户资料弹窗 -->
+  <div class="modal-overlay hidden" id="userProfileModal" role="dialog" aria-modal="true" aria-labelledby="profileName">
+    <div class="modal-card profile-modal-card">
+      <button class="modal-close" id="userProfileClose" type="button" aria-label="关闭">✕</button>
+      <div class="profile-header">
+        <div class="profile-avatar" id="profileAvatar">U</div>
+        <h2 class="profile-name" id="profileName">用户</h2>
+        <div class="profile-username" id="profileUsername">@user</div>
+        <p class="profile-bio" id="profileBio"></p>
+        <div class="profile-stats">
+          <div class="profile-stat">
+            <div class="profile-stat-value" id="profileWorks">0</div>
+            <div class="profile-stat-label">作品</div>
+          </div>
+          <div class="profile-stat">
+            <div class="profile-stat-value" id="profileLikes">0</div>
+            <div class="profile-stat-label">获赞</div>
+          </div>
+          <div class="profile-stat">
+            <div class="profile-stat-value" id="profileViews">0</div>
+            <div class="profile-stat-label">浏览</div>
+          </div>
+        </div>
+      </div>
+      <div class="profile-body">
+        <div class="profile-section-title">📷 作品</div>
+        <div class="profile-loading" id="profileLoading">
+          <div class="profile-loading-spinner"></div>
+          正在加载作品…
+        </div>
+        <div class="profile-grid" id="profileGrid"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <footer class="site-footer" id="footer">
+    <div class="footer-logo">双薪写真<span style="color:var(--color-accent);">.</span></div>
+    <p class="footer-text">Crafted with light and silence — a gallery among the stars</p>
+    <div class="footer-links">
+      <a href="#">Privacy</a><a href="#">Terms</a><a href="#">Contact</a>
+    </div>
+  </footer>
+
+  <!-- Scripts -->
+  <script src="js/config.js"></script>
+  <script src="js/utils.js"></script>
+  <script src="js/eventBus.js"></script>
+  <script src="js/nav.js"></script>
+  <script src="js/theme.js"></script>
+  <script src="js/particles.js"></script>
+  <script src="js/api.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/userProfile.js"></script>
+  <script src="js/creators.js"></script>
+</body>
+</html>

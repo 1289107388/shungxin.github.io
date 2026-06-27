@@ -264,6 +264,10 @@ async function handleUpload(req) {
   const isVisible = form.get('is_visible') !== 'false' && form.get('is_visible') !== '0';
   const sortOrder = parseInt((form.get('sort_order') || '99').toString(), 10) || 99;
   const description = (form.get('description') || '').toString().slice(0, 500) || null;
+  const rawArea = (form.get('area') || 'public').toString().trim().toLowerCase();
+  const area = rawArea === 'paid' ? 'paid' : 'public';
+  // 只有 admin 能将图片上传到付费区；普通用户强制公开区
+  const finalArea = isAdmin ? area : 'public';
 
   // 3) 校验
   const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif', 'image/avif'];
@@ -338,6 +342,7 @@ async function handleUpload(req) {
       filename,
       title: title || filename,
       category,
+      area: finalArea,
       is_visible: finalIsVisible,
       is_new: isNew,
       sort_order: sortOrder,
@@ -350,7 +355,7 @@ async function handleUpload(req) {
       mime_type: file.type,
       uploaded_by: user.id,                  // 记录上传者
     })
-    .select('id, filename, title, category, is_visible, is_new, sort_order, description, created_at, width, height, size_bytes, storage_path, storage_bucket, uploaded_by')
+    .select('id, filename, title, category, area, is_visible, is_new, sort_order, description, created_at, width, height, size_bytes, storage_path, storage_bucket, uploaded_by')
     .single();
   if (insErr) {
     // 失败回滚(删除刚上传的文件)

@@ -6,6 +6,7 @@
 // ============================
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0';
+import bcrypt from 'https://esm.sh/bcryptjs@2.4.3';
 import { verifyOrigin } from '../_shared/originGuard.ts';
 import { safeParseInt } from '../_shared/safeParams.ts';
 
@@ -200,6 +201,7 @@ Deno.serve(async (req) => {
       case 'comments':
         if (req.method === 'GET' && !id) return await handleListComments(supabase, url);
         if (req.method === 'POST' && id === 'batch') return await handleBatchComments(supabase, ctx, req);
+        if (req.method === 'PUT' && id && subAction === 'status') return await handleUpdateCommentStatus(supabase, ctx, req, id);
         if (req.method === 'DELETE' && id) return await handleDeleteComment(supabase, ctx, id);
         return createErrorResponse('未知接口', 404);
 
@@ -214,6 +216,16 @@ Deno.serve(async (req) => {
       case 'audit-logs':
         if (req.method !== 'GET') return createErrorResponse('仅支持 GET', 405);
         return await handleListAuditLogs(supabase, url);
+
+      case 'paid-area':
+        if (req.method === 'GET' && id === 'config') return await handleGetPaidAreaConfig(supabase);
+        if (req.method === 'PUT' && id === 'password') return await handleChangePaidAreaPassword(supabase, ctx, req);
+        return createErrorResponse('未知接口', 404);
+
+      case 'settings':
+        if (req.method === 'GET' && !id) return await handleListSettings(supabase);
+        if (req.method === 'PUT' && id) return await handleUpdateSetting(supabase, ctx, req, id);
+        return createErrorResponse('未知接口', 404);
 
       default:
         return createErrorResponse('未知接口', 404);
@@ -231,7 +243,7 @@ async function handleDashboard(supabase) {
   // 并行查询
   const [usersR, activeUsersR, newUsersTodayR, newUsersWeekR,
          commentsR, pendingCommentsR, commentsTodayR,
-         imagesR, visibleImagesR,
+         imagesR, visibleImagesR, paidImagesR,
          likesR, likesTodayR, viewsR, viewsTodayR] = await Promise.all([
     supabase.from('users').select('id', { count: 'exact', head: true }),
     supabase.from('users').select('id', { count: 'exact', head: true }).eq('is_active', true),
@@ -245,6 +257,7 @@ async function handleDashboard(supabase) {
       .gte('created_at', new Date(new Date().setHours(0,0,0,0)).toISOString()),
     supabase.from('gallery_images').select('id', { count: 'exact', head: true }),
     supabase.from('gallery_images').select('id', { count: 'exact', head: true }).eq('is_visible', true),
+    supabase.from('gallery_images').select('id', { count: 'exact', head: true }).eq('area', 'paid'),
     supabase.from('likes').select('id', { count: 'exact', head: true }),
     supabase.from('likes').select('id', { count: 'exact', head: true })
       .gte('created_at', new Date(new Date().setHours(0,0,0,0)).toISOString()),
@@ -293,6 +306,7 @@ async function handleDashboard(supabase) {
       images: {
         total: imagesR.count || 0,
         visible: visibleImagesR.count || 0,
+        paid: paidImagesR.count || 0,
       },
       likes: {
         total: likesR.count || 0,
@@ -483,6 +497,28 @@ async function handleDeleteComment(supabase, ctx, id) {
   return createCorsResponse({ success: true, message: '评论已删除' });
 }
 
+async function handleUpdateCommentStatus(supabase, ctx, req, id) {
+  const { status } = await req.json();
+  if (!['approved', 'pending', 'rejected'].includes(status)) {
+    return createErrorResponse('status 必须是 approved/pending/rejected 之一', 400);
+  }
+
+  const { data: target } = await supabase
+    .from('comments').select('id, content, github_username, status').eq('id', id).maybeSingle();
+  if (!target) return createErrorResponse('评论不存在', 404);
+
+  const { data, error } = await supabase
+    .from('comments').update({ status })
+    .eq('id', id)
+    .select('id, status').maybeSingle();
+  if (error) return createErrorResponse('更新失败', 500);
+
+  await logAudit(supabase, ctx, 'comments.' + status, 'comment', id,
+    { author: target.github_username, old_status: target.status, preview: (target.content || '').slice(0, 50) });
+
+  return createCorsResponse({ success: true, data });
+}
+
 // ============================
 // 图片管理
 // ============================
@@ -532,10 +568,11 @@ async function handleToggleImageVisibility(supabase, ctx, req, id) {
 }
 
 async function handleUpdateImageMeta(supabase, ctx, req, id) {
-  const { title, category, is_new, sort_order, description } = await req.json();
+  const { title, category, area, is_new, sort_order, description } = await req.json();
   const update = { updated_at: new Date().toISOString() };
   if (typeof title === 'string')        update.title = title.slice(0, 128);
   if (typeof category === 'string')     update.category = category.slice(0, 32);
+  if (area === 'public' || area === 'paid') update.area = area;
   if (typeof is_new === 'boolean')      update.is_new = is_new;
   if (Number.isInteger(sort_order))     update.sort_order = sort_order;
   if (typeof description === 'string')  update.description = description;
@@ -800,4 +837,111 @@ async function handleBatchComments(supabase, ctx, req) {
     success: true,
     data: { affected: affectedCount, requested: idList.length },
   });
+}
+
+// ============================
+// 付费区配置
+// ============================
+const DEFAULT_PAID_PASSWORD = 'shungxin2025';
+
+async function handleGetPaidAreaConfig(supabase) {
+  const { data: row, error } = await supabase
+    .from('site_settings')
+    .select('value, updated_at')
+    .eq('key', 'paid_area_password_hash')
+    .maybeSingle();
+  if (error) { console.error('读取付费区配置失败:', error); return createErrorResponse('读取配置失败', 500); }
+
+  const configured = !!row?.value;
+  const isDefaultPassword = configured
+    ? bcrypt.compareSync(DEFAULT_PAID_PASSWORD, row.value)
+    : false;
+
+  const { count: paidCount } = await supabase
+    .from('gallery_images')
+    .select('id', { count: 'exact', head: true })
+    .eq('area', 'paid');
+
+  return createCorsResponse({
+    success: true,
+    data: {
+      configured,
+      is_default_password: isDefaultPassword,
+      updated_at: row?.updated_at || null,
+      paid_images_count: paidCount || 0,
+    },
+  });
+}
+
+async function handleChangePaidAreaPassword(supabase, ctx, req) {
+  const { password } = await req.json();
+  if (!password || typeof password !== 'string' || password.length < 6) {
+    return createErrorResponse('密码至少 6 位', 400);
+  }
+
+  const hash = bcrypt.hashSync(password, 12);
+  const { error } = await supabase
+    .from('site_settings')
+    .upsert({ key: 'paid_area_password_hash', value: hash, updated_at: new Date().toISOString() },
+      { onConflict: 'key' });
+  if (error) { console.error('更新付费区密码失败:', error); return createErrorResponse('更新失败', 500); }
+
+  await logAudit(supabase, ctx, 'paid_area.change_password', 'site_setting', 'paid_area_password_hash',
+    { changed_by: ctx.user.username });
+
+  return createCorsResponse({ success: true, message: '密码已更新' });
+}
+
+// ============================
+// 站点设置 (K/V)
+// ============================
+// 允许管理员通过后台修改的非敏感站点配置。
+// 敏感配置(如 paid_area_password_hash)由专用接口管理,不暴露在此列表。
+const SETTING_KEY_ALLOWLIST = new Set([
+  'site_name',
+  'site_description',
+  'allow_user_upload',
+  'default_comment_status',
+  'maintenance_mode',
+]);
+
+async function handleListSettings(supabase) {
+  const { data, error } = await supabase
+    .from('site_settings')
+    .select('key, value, updated_at')
+    .not('key', 'like', '%_hash')
+    .not('key', 'like', '%_secret')
+    .not('key', 'like', '%_token')
+    .order('key', { ascending: true });
+  if (error) { console.error('读取站点设置失败:', error); return createErrorResponse('读取失败', 500); }
+
+  return createCorsResponse({
+    success: true,
+    data: { settings: data || [] },
+  });
+}
+
+async function handleUpdateSetting(supabase, ctx, req, key) {
+  if (!SETTING_KEY_ALLOWLIST.has(key)) {
+    return createErrorResponse('该 key 不允许通过管理后台修改', 400);
+  }
+  const { value } = await req.json();
+  if (value === undefined || value === null) return createErrorResponse('value 不能为空', 400);
+  const valueStr = String(value).slice(0, 2000);
+
+  const { data: existing } = await supabase
+    .from('site_settings').select('key').eq('key', key).maybeSingle();
+
+  let op = 'create';
+  const upsertPayload = { key, value: valueStr, updated_at: new Date().toISOString() };
+  const { error } = await supabase
+    .from('site_settings')
+    .upsert(upsertPayload, { onConflict: 'key' });
+  if (existing) op = 'update';
+  if (error) { console.error('更新站点设置失败:', error); return createErrorResponse('更新失败', 500); }
+
+  await logAudit(supabase, ctx, `settings.${op}`, 'site_setting', key,
+    { old_exists: !!existing, value_preview: valueStr.slice(0, 100) });
+
+  return createCorsResponse({ success: true, data: { key, value: valueStr } });
 }

@@ -458,6 +458,62 @@
     accent-color: var(--accent);
   }
   th.check-col, td.check-col { width: 32px; padding-left: 14px; padding-right: 0; }
+
+  /* ==================== 付费区 ==================== */
+  .paid-status-card {
+    background: var(--bg-2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 18px 20px;
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+  .paid-status-icon {
+    width: 44px; height: 44px;
+    border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 20px;
+  }
+  .paid-status-icon.ok { background: rgba(52,211,153,0.12); }
+  .paid-status-icon.warn { background: rgba(251,191,36,0.12); }
+  .paid-status-icon.danger { background: rgba(248,113,113,0.12); }
+  .paid-status-main { flex: 1; }
+  .paid-status-title { font-size: 15px; font-weight: 600; margin-bottom: 3px; }
+  .paid-status-desc { font-size: 12px; color: var(--text-2); }
+  .paid-stat-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 12px;
+    margin-bottom: 20px;
+  }
+  .paid-stat-item {
+    background: var(--bg-2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px 16px;
+  }
+  .paid-stat-item .num { font-size: 22px; font-weight: 600; }
+  .paid-stat-item .label { font-size: 12px; color: var(--text-2); margin-top: 4px; }
+  .pwd-strength {
+    height: 4px;
+    background: var(--bg-3);
+    border-radius: 2px;
+    margin-top: 8px;
+    overflow: hidden;
+  }
+  .pwd-strength-bar {
+    height: 100%;
+    width: 0%;
+    transition: width 0.2s, background 0.2s;
+  }
+  .pwd-strength-bar.weak { background: var(--danger); }
+  .pwd-strength-bar.medium { background: var(--warning); }
+  .pwd-strength-bar.strong { background: var(--success); }
+  .pwd-strength-text { font-size: 11px; margin-top: 4px; color: var(--text-3); }
+  .badge-paid { background: rgba(251,191,36,0.2); color: var(--warning); }
+  .badge-public { background: rgba(96,165,250,0.2); color: var(--info); }
 </style>
 </head>
 <body>
@@ -496,11 +552,13 @@
       <div class="nav-item active" data-page="dashboard"><span class="icon">▦</span>仪表板</div>
       <div class="nav-item" data-page="users"><span class="icon">◉</span>用户管理</div>
       <div class="nav-item" data-page="images"><span class="icon">▣</span>图片管理</div>
+      <div class="nav-item" data-page="paid-area"><span class="icon">★</span>付费区</div>
       <div class="nav-item" data-page="comments"><span class="icon">▤</span>评论管理</div>
       <div class="nav-item" data-page="audit"><span class="icon">▥</span>审计日志</div>
+      <div class="nav-item" data-page="settings"><span class="icon">⚙</span>站点设置</div>
     </nav>
     <div class="sidebar-footer">
-      <span class="user" id="userInfo">—</span>
+      <span class="user" id="userInfo" style="cursor:pointer;" onclick="showAdminProfile()" title="查看个人资料">—</span>
       <button class="btn btn-secondary btn-sm" id="logoutBtn">退出</button>
     </div>
   </aside>
@@ -602,6 +660,21 @@ function fmtRelative(s) {
 }
 function escapeHtml(s) {
   return String(s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
+}
+function csvCell(s) {
+  const str = String(s == null ? '' : s).replace(/"/g, '""');
+  if (/[",\n\r]/.test(str)) return `"${str}"`;
+  return str;
+}
+function downloadCSV(filename, rows) {
+  const bom = '\uFEFF';
+  const lines = rows.map(r => r.map(csvCell).join(','));
+  const blob = new Blob([bom + lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click();
+  a.remove(); URL.revokeObjectURL(url);
 }
 function toast(msg, type = 'success') {
   const t = document.createElement('div');
@@ -740,11 +813,55 @@ async function loadPage(page) {
     if (page === 'dashboard') await renderDashboard(c);
     else if (page === 'users')     await renderUsers(c);
     else if (page === 'images')    await renderImages(c);
+    else if (page === 'paid-area') await renderPaidArea(c);
     else if (page === 'comments')  await renderComments(c);
     else if (page === 'audit')     await renderAudit(c);
+    else if (page === 'settings')  await renderSettings(c);
   } catch (err) {
     c.innerHTML = '<div class="alert alert-error">' + escapeHtml(err.message) + '</div>';
   }
+}
+
+// ============================
+// CSV 导出
+// ============================
+async function exportUsers() {
+  const { data } = await api('/users?page=1&pageSize=1000');
+  const rows = [['ID', '用户名', '昵称', '角色', '状态', '注册时间', '最后登录']];
+  (data.users || []).forEach(u => rows.push([
+    u.id, u.username, u.display_name || '', u.role,
+    u.is_active ? '启用' : '禁用', u.created_at, u.last_login_at || ''
+  ]));
+  downloadCSV(`users_${new Date().toISOString().slice(0,10)}.csv`, rows);
+}
+async function exportImages() {
+  const { data } = await api('/images');
+  const rows = [['ID', '标题', '文件名', '分类', '分区', '可见', '新作品', '点赞', '浏览', '排序', '上传者', '创建时间']];
+  (data.images || []).forEach(img => rows.push([
+    img.id, img.title || '', img.filename || '', img.category || '',
+    img.area || 'public', img.is_visible ? '是' : '否', img.is_new ? '是' : '否',
+    img.like_count || 0, img.view_count || 0, img.sort_order,
+    img.uploaded_by || '', img.created_at || ''
+  ]));
+  downloadCSV(`images_${new Date().toISOString().slice(0,10)}.csv`, rows);
+}
+async function exportComments() {
+  const { data } = await api('/comments?page=1&pageSize=1000');
+  const rows = [['ID', '作者', '内容', '状态', '来源', '图片ID', '用户ID', '创建时间']];
+  (data.comments || []).forEach(c => rows.push([
+    c.id, c.github_username || '匿名', c.content || '', c.status,
+    c.source || '', c.image_id || '', c.user_id || '', c.created_at
+  ]));
+  downloadCSV(`comments_${new Date().toISOString().slice(0,10)}.csv`, rows);
+}
+async function exportAudit() {
+  const { data } = await api('/audit-logs?page=1&pageSize=1000');
+  const rows = [['时间', '管理员', '管理员ID', '操作', '目标类型', '目标ID', '详情', 'IP']];
+  (data.logs || []).forEach(l => rows.push([
+    l.created_at, l.admin_name || '', l.admin_id || '', l.action,
+    l.target_type || '', l.target_id || '', JSON.stringify(l.details || {}), l.ip || ''
+  ]));
+  downloadCSV(`audit_${new Date().toISOString().slice(0,10)}.csv`, rows);
 }
 
 // ============================
@@ -774,7 +891,7 @@ async function renderDashboard(c) {
       <div class="stat-card purple">
         <div class="label">总图片数</div>
         <div class="value">${fmtNum(data.images.total)}</div>
-        <div class="delta">${fmtNum(data.images.visible)} 可见</div>
+        <div class="delta">${fmtNum(data.images.visible)} 可见 · ${fmtNum(data.images.paid)} 付费区</div>
       </div>
       <div class="stat-card red">
         <div class="label">总点赞数</div>
@@ -809,6 +926,136 @@ async function renderDashboard(c) {
 }
 
 // ============================
+// 付费区管理
+// ============================
+async function renderPaidArea(c) {
+  c.innerHTML = `
+    <div class="page-header">
+      <div><div class="page-title">付费区（里站）管理</div><div class="page-subtitle">密码保护、分区状态与内容统计</div></div>
+    </div>
+    <div id="paidAreaBody" class="loading"><span class="spinner"></span> 加载中…</div>
+  `;
+  const { data: cfg } = await api('/paid-area/config');
+  const isUnconfigured = !cfg.configured;
+  const isDefault = cfg.is_default_password;
+  const body = $('#paidAreaBody');
+
+  const statusIcon = isUnconfigured || isDefault ? 'warn' : 'ok';
+  const statusEmoji = isUnconfigured ? '!' : isDefault ? '⚠' : '✓';
+  const statusTitle = isUnconfigured
+    ? '付费区尚未配置密码'
+    : isDefault
+      ? '正在使用默认密码'
+      : '付费区密码已配置';
+  const statusDesc = isUnconfigured
+    ? '请立即设置访问密码，否则任何人都可以直接进入付费区。'
+    : isDefault
+      ? '当前仍是默认密码 shungxin2025，强烈建议立即修改。'
+      : `上次更新：${fmtDate(cfg.updated_at)}`;
+
+  body.innerHTML = `
+    <div class="paid-status-card">
+      <div class="paid-status-icon ${statusIcon}"><span style="color:var(--${isUnconfigured || isDefault ? 'danger' : 'success'});">${statusEmoji}</span></div>
+      <div class="paid-status-main">
+        <div class="paid-status-title">${statusTitle}</div>
+        <div class="paid-status-desc">${statusDesc}</div>
+      </div>
+    </div>
+
+    <div class="paid-stat-row">
+      <div class="paid-stat-item">
+        <div class="num">${cfg.paid_images_count}</div>
+        <div class="label">付费区图片</div>
+      </div>
+      <div class="paid-stat-item">
+        <div class="num">${cfg.configured ? '已启用' : '未启用'}</div>
+        <div class="label">密码保护</div>
+      </div>
+    </div>
+
+    <div class="trend-card">
+      <h3>修改访问密码</h3>
+      <div class="form-group" style="max-width:400px;">
+        <label>新密码 <span class="text-muted">(至少 6 位，建议 12 位以上)</span></label>
+        <input type="password" id="paidPassword" placeholder="输入新密码" autocomplete="new-password">
+        <div class="pwd-strength"><div class="pwd-strength-bar" id="pwdStrengthBar"></div></div>
+        <div class="pwd-strength-text" id="pwdStrengthText"></div>
+      </div>
+      <div class="form-group" style="max-width:400px;">
+        <label>确认密码</label>
+        <input type="password" id="paidPasswordConfirm" placeholder="再次输入新密码" autocomplete="new-password">
+      </div>
+      <div id="pwdChangeAlert"></div>
+      <button class="btn" id="pwdChangeBtn">更新密码</button>
+      <div class="text-muted" style="font-size:11px;margin-top:10px;">
+        提示：修改密码后，已颁发的访问 token 仍可在 1 小时内继续使用，之后必须输入新密码。
+      </div>
+    </div>
+  `;
+
+  const pwd = $('#paidPassword');
+  const bar = $('#pwdStrengthBar');
+  const text = $('#pwdStrengthText');
+  pwd.oninput = () => {
+    const s = pwd.value;
+    const score = evaluatePasswordStrength(s);
+    bar.style.width = score.pct + '%';
+    bar.className = 'pwd-strength-bar ' + score.level;
+    text.textContent = score.label;
+  };
+
+  $('#pwdChangeBtn').onclick = async () => {
+    const p1 = pwd.value;
+    const p2 = $('#paidPasswordConfirm').value;
+    const alertBox = $('#pwdChangeAlert');
+    alertBox.innerHTML = '';
+    if (p1.length < 6) {
+      alertBox.innerHTML = '<div class="alert alert-error">密码长度至少 6 位</div>';
+      return;
+    }
+    if (p1 !== p2) {
+      alertBox.innerHTML = '<div class="alert alert-error">两次输入的密码不一致</div>';
+      return;
+    }
+    const score = evaluatePasswordStrength(p1);
+    if (score.level === 'weak' && !confirmAction('密码强度较弱，确定要使用吗？')) return;
+    const btn = $('#pwdChangeBtn');
+    btn.disabled = true; btn.textContent = '更新中…';
+    try {
+      await api('/paid-area/password', { method: 'PUT', body: JSON.stringify({ password: p1 }) });
+      alertBox.innerHTML = '<div class="alert alert-success">密码已更新</div>';
+      pwd.value = ''; $('#paidPasswordConfirm').value = '';
+      bar.style.width = '0%'; bar.className = 'pwd-strength-bar';
+      text.textContent = '';
+      // 刷新状态卡片
+      renderPaidArea(c);
+    } catch (err) {
+      alertBox.innerHTML = '<div class="alert alert-error">' + escapeHtml(err.message) + '</div>';
+    } finally {
+      btn.disabled = false; btn.textContent = '更新密码';
+    }
+  };
+}
+
+function evaluatePasswordStrength(p) {
+  if (!p) return { pct: 0, level: '', label: '' };
+  let score = 0;
+  if (p.length >= 8) score++;
+  if (p.length >= 12) score++;
+  if (/[a-z]/.test(p) && /[A-Z]/.test(p)) score++;
+  if (/\d/.test(p)) score++;
+  if (/[^a-zA-Z0-9]/.test(p)) score++;
+  const levels = [
+    { pct: 20, level: 'weak', label: '弱：建议增加长度和特殊字符' },
+    { pct: 50, level: 'weak', label: '弱' },
+    { pct: 70, level: 'medium', label: '中' },
+    { pct: 90, level: 'medium', label: '中' },
+    { pct: 100, level: 'strong', label: '强' },
+  ];
+  return levels[Math.min(score, 4)];
+}
+
+// ============================
 // 用户管理
 // ============================
 async function renderUsers(c) {
@@ -831,6 +1078,7 @@ async function renderUsers(c) {
       </select>
       <button class="btn btn-sm" id="userSearchBtn">搜索</button>
       <span class="spacer"></span>
+      <button class="btn btn-sm btn-secondary" onclick="exportUsers()">导出 CSV</button>
     </div>
     <div id="userList" class="table-wrap">
       <div class="loading"><span class="spinner"></span></div>
@@ -964,34 +1212,45 @@ AdminActions.deleteUser = async (id, username) => {
   } catch (err) { toast(err.message, 'error'); }
 };
 
-// 兼容旧的全局函数名（向后兼容）
-window.toggleUserStatus = AdminActions.toggleUserStatus;
-window.toggleUserRole = AdminActions.toggleUserRole;
-window.deleteUser = AdminActions.deleteUser;
-
 // ============================
 // 图片管理
 // ============================
 async function renderImages(c) {
+  if (!State.pageState.images) State.pageState.images = { area: '' };
   c.innerHTML = `
     <div class="page-header">
-      <div><div class="page-title">图片管理</div><div class="page-subtitle">管理图片的可见性/新作品标签/排序 · 上传后自动压成 WebP</div></div>
+      <div><div class="page-title">图片管理</div><div class="page-subtitle">管理图片的可见性/分区/新作品标签/排序 · 上传后自动压成 WebP</div></div>
     </div>
     <div class="toolbar">
       <button class="btn" onclick="openUploadDialog()">+ 上传图片</button>
       <span class="text-muted" style="font-size:12px;">支持 jpg / png / webp / heic · 单图 ≤ 10MB</span>
+      <select id="imageAreaFilter" style="margin-left:8px;">
+        <option value="">所有分区</option>
+        <option value="public">公开区</option>
+        <option value="paid">付费区</option>
+      </select>
       <span class="spacer"></span>
+      <button class="btn btn-sm btn-secondary" onclick="exportImages()">导出 CSV</button>
     </div>
     <div id="imageBatchBar"></div>
     <div id="imageList" class="image-grid"><div class="loading"><span class="spinner"></span></div></div>
   `;
+  $('#imageAreaFilter').value = State.pageState.images.area;
+  $('#imageAreaFilter').onchange = (e) => {
+    State.pageState.images.area = e.target.value;
+    loadPage('images');
+  };
+
   const { data } = await api('/images');
-  if (!data.images.length) {
-    $('#imageList').innerHTML = '<div class="empty-state">暂无图片</div>';
+  const areaFilter = State.pageState.images.area;
+  const images = areaFilter ? data.images.filter(img => img.area === areaFilter) : data.images;
+
+  if (!images.length) {
+    $('#imageList').innerHTML = '<div class="empty-state">' + (areaFilter ? '该分区暂无图片' : '暂无图片') + '</div>';
     return;
   }
   const selected = getSelection();
-  $('#imageList').innerHTML = data.images.map(img => {
+  $('#imageList').innerHTML = images.map(img => {
     // 区分状态:待审核 / 已隐藏 / 正常
     const isPending = !img.is_visible && img.uploaded_by != null;
     const isHidden  = !img.is_visible && img.uploaded_by == null;
@@ -1000,11 +1259,15 @@ async function renderImages(c) {
       : isHidden
         ? '<span class="status-tag hidden">已隐藏</span>'
         : '';
+    const areaTag = img.area === 'paid'
+      ? '<span class="status-tag" style="background:rgba(251,191,36,0.9);color:#1a1d24;right:6px;left:auto;top:28px;">付费</span>'
+      : '';
     return `
     <div class="image-card ${selected.has(img.id) ? 'row-selected' : ''}" style="${selected.has(img.id) ? 'outline:2px solid var(--accent);' : ''}">
       <div class="thumb" style="background-image:url('${escapeHtml(img.src)}');">
         <input type="checkbox" class="image-check" data-id="${img.id}" ${selected.has(img.id) ? 'checked' : ''} style="position:absolute;top:6px;left:6px;width:18px;height:18px;cursor:pointer;z-index:2;accent-color:var(--accent);">
         ${statusTag}
+        ${areaTag}
         ${img.is_new ? '<span class="status-tag new" style="right:6px;left:auto;">新</span>' : ''}
       </div>
       <div class="info">
@@ -1013,6 +1276,7 @@ async function renderImages(c) {
           <span>♥ ${fmtNum(img.like_count)}</span>
           <span>👁 ${fmtNum(img.view_count)}</span>
           <span>序 ${img.sort_order}</span>
+          <span class="badge ${img.area === 'paid' ? 'badge-paid' : 'badge-public'}">${img.area === 'paid' ? '付费区' : '公开区'}</span>
           ${img.uploaded_by ? `<span class="text-muted" title="用户上传">👤</span>` : ''}
         </div>
       </div>
@@ -1021,6 +1285,7 @@ async function renderImages(c) {
           ? `<button class="btn btn-sm" style="background:var(--success);" onclick="approveImage(${img.id})">通过</button>`
           : `<button class="btn btn-sm btn-secondary" onclick="toggleImageVisibility(${img.id}, ${!img.is_visible})">${img.is_visible ? '隐藏' : '显示'}</button>`
         }
+        <button class="btn btn-sm btn-secondary" onclick="toggleImageArea(${img.id}, '${img.area === 'paid' ? 'public' : 'paid'}')">${img.area === 'paid' ? '转公开' : '转付费'}</button>
         <button class="btn btn-sm btn-secondary" onclick="toggleImageNew(${img.id}, ${!img.is_new})">${img.is_new ? '取消新' : '标新'}</button>
         <button class="btn btn-sm btn-secondary" onclick="editImageMeta(${img.id})">编辑</button>
         <button class="btn btn-sm" style="background:var(--danger);color:#fff;" onclick="deleteImage(${img.id}, '${escapeHtml(img.filename).replace(/'/g, "\\'")}')">删除</button>
@@ -1052,6 +1317,14 @@ AdminActions.approveImage = async (id) => {
   try {
     await api(`/images/${id}/visibility`, { method: 'PUT', body: JSON.stringify({ is_visible: true }) });
     toast('已通过审核,图片已上线');
+    loadPage('images');
+  } catch (err) { toast(err.message, 'error'); }
+};
+AdminActions.toggleImageArea = async (id, newArea) => {
+  if (!confirmAction(`确定要将该图片移动到「${newArea === 'paid' ? '付费区' : '公开区'}」?`)) return;
+  try {
+    await api(`/images/${id}/meta`, { method: 'PUT', body: JSON.stringify({ area: newArea }) });
+    toast('已移动到' + (newArea === 'paid' ? '付费区' : '公开区'));
     loadPage('images');
   } catch (err) { toast(err.message, 'error'); }
 };
@@ -1101,6 +1374,13 @@ AdminActions.editImageMeta = async (id) => {
         <label>描述</label>
         <textarea name="description" rows="3" style="width:100%;padding:9px 12px;background:var(--bg-3);border:1px solid var(--border);border-radius:6px;color:var(--text);">${escapeHtml(target.description || '')}</textarea>
       </div>
+      <div class="form-group">
+        <label>分区</label>
+        <select name="area" style="width:100%;padding:9px 12px;background:var(--bg-3);border:1px solid var(--border);border-radius:6px;color:var(--text);">
+          <option value="public" ${target.area === 'public' ? 'selected' : ''}>公开区</option>
+          <option value="paid" ${target.area === 'paid' ? 'selected' : ''}>付费区</option>
+        </select>
+      </div>
       <div class="row" style="margin-top:18px;justify-content:flex-end;">
         <button type="button" class="btn btn-secondary" onclick="closeModal()">取消</button>
         <button type="submit" class="btn">保存</button>
@@ -1119,6 +1399,7 @@ AdminActions.editImageMeta = async (id) => {
           category: f.category.value.trim(),
           sort_order: parseInt(f.sort_order.value),
           description: f.description.value,
+          area: f.area.value,
         }),
       });
       toast('已保存');
@@ -1128,6 +1409,16 @@ AdminActions.editImageMeta = async (id) => {
   };
 };
 window.closeModal = () => $('#modal').classList.add('hidden');
+
+// 兼容旧的全局函数名（向后兼容）：把 AdminActions 方法暴露到 window,供 inline onclick 调用
+window.toggleUserStatus = AdminActions.toggleUserStatus;
+window.toggleUserRole = AdminActions.toggleUserRole;
+window.deleteUser = AdminActions.deleteUser;
+window.toggleImageArea = AdminActions.toggleImageArea;
+window.approveImage = AdminActions.approveImage;
+window.deleteImage = AdminActions.deleteImage;
+window.toggleImageNew = AdminActions.toggleImageNew;
+window.editImageMeta = AdminActions.editImageMeta;
 
 // ============================
 // 图片上传(走 upload-image Edge Function)
@@ -1158,6 +1449,13 @@ window.openUploadDialog = () => {
       <div class="form-group">
         <label>描述</label>
         <textarea name="description" id="uploadDesc" rows="2" maxlength="500" style="width:100%;padding:9px 12px;background:var(--bg-3);border:1px solid var(--border);border-radius:6px;color:var(--text);"></textarea>
+      </div>
+      <div class="form-group">
+        <label>分区</label>
+        <select name="area" id="uploadArea" style="width:100%;padding:9px 12px;background:var(--bg-3);border:1px solid var(--border);border-radius:6px;color:var(--text);">
+          <option value="public">公开区</option>
+          <option value="paid">付费区</option>
+        </select>
       </div>
       <div class="form-group" style="display:flex;gap:14px;align-items:center;">
         <label style="display:flex;gap:6px;align-items:center;margin:0;cursor:pointer;">
@@ -1203,6 +1501,7 @@ window.openUploadDialog = () => {
     fd.append('category', $('#uploadCategory').value.trim() || 'portrait');
     fd.append('sort_order', $('#uploadSort').value || '99');
     fd.append('description', $('#uploadDesc').value || '');
+    fd.append('area', $('#uploadArea').value || 'public');
     fd.append('is_new', $('#uploadIsNew').checked ? 'true' : 'false');
     fd.append('is_visible', $('#uploadIsVisible').checked ? 'true' : 'false');
 
@@ -1272,6 +1571,8 @@ async function renderComments(c) {
         <option value="rejected">已拒绝</option>
       </select>
       <button class="btn btn-sm" id="commentSearchBtn">搜索</button>
+      <span class="spacer"></span>
+      <button class="btn btn-sm btn-secondary" onclick="exportComments()">导出 CSV</button>
     </div>
     <div id="commentList" class="table-wrap"><div class="loading"><span class="spinner"></span></div></div>
   `;
@@ -1322,6 +1623,9 @@ function renderCommentTable({ comments, total, page, pageSize }) {
           <td>${c.image_id || '—'}</td>
           <td>${fmtRelative(c.created_at)}</td>
           <td>
+            ${c.status !== 'approved' ? `<button class="btn btn-sm" style="background:var(--success);" onclick="updateCommentStatus(${c.id}, 'approved')">通过</button>` : ''}
+            ${c.status !== 'rejected' ? `<button class="btn btn-sm btn-secondary" onclick="updateCommentStatus(${c.id}, 'rejected')">拒绝</button>` : ''}
+            ${c.status !== 'pending' ? `<button class="btn btn-sm btn-secondary" onclick="updateCommentStatus(${c.id}, 'pending')">待审</button>` : ''}
             <button class="btn btn-sm btn-danger" onclick="deleteComment(${c.id})">删除</button>
           </td>
         </tr>
@@ -1365,6 +1669,16 @@ window.deleteComment = async (id) => {
   } catch (err) { toast(err.message, 'error'); }
 };
 
+window.updateCommentStatus = async (id, status) => {
+  const labels = { approved: '通过', rejected: '拒绝', pending: '待审' };
+  if (!confirmAction(`确定要${labels[status]}该评论?`)) return;
+  try {
+    await api(`/comments/${id}/status`, { method: 'PUT', body: JSON.stringify({ status }) });
+    toast('评论已' + labels[status]);
+    loadComments();
+  } catch (err) { toast(err.message, 'error'); }
+};
+
 // ============================
 // 批量操作(用户/图片/评论)
 // ============================
@@ -1398,6 +1712,8 @@ function renderBatchBar() {
       <button class="btn btn-sm" style="background:var(--success);" onclick="batchImages('approve')">批量通过审核</button>
       <button class="btn btn-sm" onclick="batchImages('show')">批量显示</button>
       <button class="btn btn-sm btn-secondary" onclick="batchImages('hide')">批量隐藏</button>
+      <button class="btn btn-sm" onclick="batchImages('set_paid')">批量转付费区</button>
+      <button class="btn btn-sm btn-secondary" onclick="batchImages('set_public')">批量转公开区</button>
       <button class="btn btn-sm" onclick="batchImages('set_new')">标记为新作品</button>
       <button class="btn btn-sm btn-secondary" onclick="batchImages('unset_new')">取消新作品</button>
       <button class="btn btn-sm" style="background:var(--danger);color:#fff;" onclick="batchImages('delete')">批量删除</button>
@@ -1449,7 +1765,7 @@ window.batchImages = async (action) => {
   const ids = Array.from(getSelection());
   if (!ids.length) return toast('请先勾选图片', 'error');
   // approve 映射到后端 show 动作 (通过审核 = 设为可见)
-  const text = { show: '显示', hide: '隐藏', set_new: '标为新作品', unset_new: '取消新作品', approve: '通过审核', delete: '删除' }[action];
+  const text = { show: '显示', hide: '隐藏', set_new: '标为新作品', unset_new: '取消新作品', approve: '通过审核', set_paid: '移动到付费区', set_public: '移动到公开区', delete: '删除' }[action];
   const backendAction = action === 'approve' ? 'show' : action;
   if (!confirmAction(`确定要批量${text} ${ids.length} 张图片?`)) return;
 
@@ -1507,15 +1823,22 @@ async function renderAudit(c) {
         <option value="users.promote">用户升级</option>
         <option value="users.demote">用户降级</option>
         <option value="users.delete">用户删除</option>
-        <option value="users.batch_">用户批量 (users.batch_*)</option>
+        <option value="users.batch_*">用户批量 (users.batch_*)</option>
+        <option value="comments.approved">评论通过</option>
+        <option value="comments.pending">评论待审</option>
+        <option value="comments.rejected">评论拒绝</option>
         <option value="comments.delete">评论删除</option>
-        <option value="comments.batch_">评论批量 (comments.batch_*)</option>
+        <option value="comments.batch_*">评论批量 (comments.batch_*)</option>
         <option value="images.show">图片显示</option>
         <option value="images.hide">图片隐藏</option>
         <option value="images.update">图片更新</option>
-        <option value="images.batch_">图片批量 (images.batch_*)</option>
+        <option value="images.batch_*">图片批量 (images.batch_*)</option>
+        <option value="paid_area.change_password">付费区改密</option>
+        <option value="settings.*">站点设置 (settings.*)</option>
       </select>
       <button class="btn btn-sm" id="auditFilterBtn">筛选</button>
+      <span class="spacer"></span>
+      <button class="btn btn-sm btn-secondary" onclick="exportAudit()">导出 CSV</button>
     </div>
     <div id="auditList" class="table-wrap"><div class="loading"><span class="spinner"></span></div></div>
   `;
@@ -1579,6 +1902,147 @@ function renderPagination(total, page, pageSize, onPageClick) {
     </div>
   `;
 }
+
+// ============================
+// 站点设置
+// ============================
+const SETTING_LABELS = {
+  site_name: { label: '站点名称', placeholder: 'shungxin-gallery', type: 'text' },
+  site_description: { label: '站点描述', placeholder: '一句话描述站点', type: 'text' },
+  allow_user_upload: { label: '允许用户上传', placeholder: 'true / false', type: 'select', options: [['true', '是'], ['false', '否']] },
+  default_comment_status: { label: '默认评论状态', placeholder: 'approved / pending', type: 'select', options: [['approved', '已通过'], ['pending', '待审核']] },
+  maintenance_mode: { label: '维护模式', placeholder: 'true / false', type: 'select', options: [['true', '开启'], ['false', '关闭']] },
+};
+
+async function renderSettings(c) {
+  c.innerHTML = `
+    <div class="page-header">
+      <div><div class="page-title">站点设置</div><div class="page-subtitle">管理站点级公开配置(敏感配置不显示)</div></div>
+    </div>
+    <div id="settingsBody" class="loading"><span class="spinner"></span> 加载中…</div>
+  `;
+  const { data } = await api('/settings');
+  const map = {};
+  (data.settings || []).forEach(s => { map[s.key] = s.value; });
+  const body = $('#settingsBody');
+
+  const rows = Object.entries(SETTING_LABELS).map(([key, meta]) => {
+    const current = map[key] || '';
+    let input = '';
+    if (meta.type === 'select') {
+      input = `<select id="setting-${key}" style="width:100%;padding:9px 12px;background:var(--bg-3);border:1px solid var(--border);border-radius:6px;color:var(--text);">
+        ${meta.options.map(([v, t]) => `<option value="${v}" ${current === v ? 'selected' : ''}>${t}</option>`).join('')}
+      </select>`;
+    } else {
+      input = `<input type="text" id="setting-${key}" value="${escapeHtml(current)}" placeholder="${escapeHtml(meta.placeholder)}" style="width:100%;padding:9px 12px;background:var(--bg-3);border:1px solid var(--border);border-radius:6px;color:var(--text);">`;
+    }
+    return `
+      <div class="form-group" style="max-width:480px;">
+        <label>${escapeHtml(meta.label)} <code>${escapeHtml(key)}</code></label>
+        ${input}
+        <div class="text-muted" style="font-size:11px;margin-top:4px;">当前: ${escapeHtml(current || '(未设置)')}</div>
+      </div>
+    `;
+  }).join('');
+
+  body.innerHTML = `
+    <div class="trend-card">
+      <h3>基本配置</h3>
+      <form id="settingsForm">
+        ${rows}
+        <div id="settingsAlert"></div>
+        <button type="submit" class="btn">保存设置</button>
+      </form>
+    </div>
+  `;
+
+  $('#settingsForm').onsubmit = async (e) => {
+    e.preventDefault();
+    const btn = e.target.querySelector('button[type="submit"]');
+    btn.disabled = true; btn.textContent = '保存中…';
+    try {
+      for (const key of Object.keys(SETTING_LABELS)) {
+        const value = $(`#setting-${key}`).value.trim();
+        await api(`/settings/${key}`, { method: 'PUT', body: JSON.stringify({ value }) });
+      }
+      $('#settingsAlert').innerHTML = '<div class="alert alert-success">设置已保存</div>';
+      setTimeout(() => { if ($('#settingsAlert')) $('#settingsAlert').innerHTML = ''; }, 2000);
+    } catch (err) {
+      $('#settingsAlert').innerHTML = '<div class="alert alert-error">' + escapeHtml(err.message) + '</div>';
+    } finally {
+      btn.disabled = false; btn.textContent = '保存设置';
+    }
+  };
+}
+
+// ============================
+// 管理员个人资料
+// ============================
+window.showAdminProfile = async () => {
+  $('#modalContent').innerHTML = '<div class="loading" style="padding:40px;"><span class="spinner"></span></div>';
+  $('#modal').classList.remove('hidden');
+  try {
+    const res = await fetch(`https://${SUPABASE_URL}/functions/v1/auth-api/me`, {
+      headers: { 'apikey': ANON_KEY, 'Authorization': 'Bearer ' + State.token },
+    });
+    const { user } = await res.json();
+    $('#modalContent').innerHTML = `
+      <div style="padding:18px 20px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;">
+        <h3 style="font-size:15px;">管理员资料</h3>
+        <button class="btn btn-sm btn-secondary" onclick="closeModal()">关闭</button>
+      </div>
+      <div style="padding:18px 20px;">
+        <div class="form-group">
+          <label>用户名</label>
+          <input type="text" value="${escapeHtml(user.username)}" disabled style="width:100%;padding:9px 12px;background:var(--bg-3);border:1px solid var(--border);border-radius:6px;color:var(--text-3);">
+        </div>
+        <div class="form-group">
+          <label>显示名称</label>
+          <input type="text" value="${escapeHtml(user.display_name || '')}" disabled style="width:100%;padding:9px 12px;background:var(--bg-3);border:1px solid var(--border);border-radius:6px;color:var(--text-3);">
+        </div>
+        <div class="form-group">
+          <label>角色</label>
+          <input type="text" value="${escapeHtml(user.role)}" disabled style="width:100%;padding:9px 12px;background:var(--bg-3);border:1px solid var(--border);border-radius:6px;color:var(--text-3);">
+        </div>
+        <hr style="border:0;border-top:1px solid var(--border);margin:18px 0;">
+        <h4 style="font-size:14px;margin-bottom:12px;color:var(--text-2);">修改登录密码</h4>
+        <form id="changePasswordForm">
+          <div class="form-group">
+            <label>原密码</label>
+            <input type="password" name="old_password" required style="width:100%;padding:9px 12px;background:var(--bg-3);border:1px solid var(--border);border-radius:6px;color:var(--text);">
+          </div>
+          <div class="form-group">
+            <label>新密码 <span class="text-muted">(至少6位)</span></label>
+            <input type="password" name="new_password" required minlength="6" style="width:100%;padding:9px 12px;background:var(--bg-3);border:1px solid var(--border);border-radius:6px;color:var(--text);">
+          </div>
+          <div id="pwdAlert"></div>
+          <button type="submit" class="btn">修改密码</button>
+        </form>
+      </div>
+    `;
+    $('#changePasswordForm').onsubmit = async (e) => {
+      e.preventDefault();
+      const f = e.target;
+      const alertBox = $('#pwdAlert');
+      alertBox.innerHTML = '';
+      try {
+        const res = await fetch(`https://${SUPABASE_URL}/functions/v1/auth-api/change-password`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'apikey': ANON_KEY, 'Authorization': 'Bearer ' + State.token },
+          body: JSON.stringify({ old_password: f.old_password.value, new_password: f.new_password.value }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || ('HTTP ' + res.status));
+        alertBox.innerHTML = '<div class="alert alert-success">密码已修改</div>';
+        f.reset();
+      } catch (err) {
+        alertBox.innerHTML = '<div class="alert alert-error">' + escapeHtml(err.message) + '</div>';
+      }
+    };
+  } catch (err) {
+    $('#modalContent').innerHTML = '<div class="alert alert-error" style="margin:20px;">' + escapeHtml(err.message) + '</div>';
+  }
+};
 
 // ============================
 // 启动

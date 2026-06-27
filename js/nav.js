@@ -96,9 +96,13 @@
     /* ============================
        Init
        ============================ */
-    // 首次加载显示骨架屏
-    showSkeletonLoading();
-    setTimeout(() => renderGallery('all'), 300);
+    // 首次加载显示骨架屏（仅在包含画廊的页面执行）
+    if (document.getElementById('galleryGrid') || document.getElementById('paidGalleryGrid')) {
+      if (typeof showSkeletonLoading === 'function') showSkeletonLoading();
+      setTimeout(() => {
+        if (typeof renderGallery === 'function') renderGallery('all');
+      }, 300);
+    }
 
   global.showToast = showToast;
   global.Nav = {

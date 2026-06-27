@@ -17,14 +17,27 @@
       const ANON_KEY = cfg.anonKey || '';
       if (!/^https?:\/\//i.test(SUPA_URL)) SUPA_URL = 'https://' + SUPA_URL;
       try {
-        const r = await fetch(`${SUPA_URL}/functions/v1/public-gallery/images`, {
+        const paidMode = !!window.__PAID_AREA_MODE;
+        const areaParam = paidMode ? 'paid' : 'public';
+        const headers = {
+          'apikey': ANON_KEY,
+          'Authorization': 'Bearer ' + ANON_KEY,
+        };
+        if (paidMode) {
+          const paidToken = typeof window.getPaidAreaToken === 'function' ? window.getPaidAreaToken() : '';
+          if (paidToken) headers['X-Paid-Area-Token'] = paidToken;
+        }
+        const r = await fetch(`${SUPA_URL}/functions/v1/public-gallery/images?area=${areaParam}`, {
           method: 'GET',
-          headers: {
-            'apikey': ANON_KEY,
-            'Authorization': 'Bearer ' + ANON_KEY,
-          },
+          headers,
         });
         if (!r.ok) {
+          // 付费区 token 失效/缺失时,清理本地状态并提示重新输入密码
+          if (paidMode && (r.status === 401 || r.status === 403)) {
+            if (typeof window.clearPaidAreaToken === 'function') window.clearPaidAreaToken();
+            if (typeof window.showToast === 'function') window.showToast('付费区访问权限已过期，请重新输入密码', 'warning');
+            document.getElementById('paidAreaGate')?.classList.remove('hidden');
+          }
           console.warn('[public-gallery] 拉取失败,http=' + r.status);
           return;
         }
@@ -37,6 +50,7 @@
           src: n.src,
           title: n.title || n.filename,
           category: n.category || 'portrait',
+          area: n.area || 'public',
           date: '',
           location: '',
           isNew: !!n.is_new,
@@ -44,6 +58,8 @@
           isLocal: !!n.is_local,                    // 标记: 老图(走主站静态)还是新图(走 supabase storage)
           storagePath: n.storage_path || null,
           sort_order: n.sort_order != null ? n.sort_order : 999,
+          uploaded_by: n.uploaded_by || null,
+          uploader: n.uploader || null,
         }));
 
         // 按 sort_order 升序(后端已经排过,这里再保一次)
@@ -81,7 +97,9 @@
     /* ============================
        Gallery Rendering
        ============================ */
-    const galleryGrid = document.getElementById('galleryGrid');
+    const isPaidArea = !!window.__PAID_AREA_MODE;
+    const galleryGrid = document.getElementById(isPaidArea ? 'paidGalleryGrid' : 'galleryGrid');
+    if (!galleryGrid) return; // 当前页面没有对应画廊容器（如 creators.html）
     let currentFilter = 'all';
     let currentSort = 'default';
     let filteredImages = [...imageData];
@@ -98,6 +116,37 @@
     function getCategoryLabel(cat) {
       const labels = { landscape: '风景', city: '城市', portrait: '人像', nature: '自然' };
       return labels[cat] || cat;
+    }
+
+    // === 作者信息徽章 ===
+    function renderAuthorBadge(uploader, uploadedBy, variant = 'card') {
+      if (!uploader && !uploadedBy) return '';
+      const safeName = escapeHtmlText(uploader?.display_name || uploader?.username || '用户');
+      const safeUsername = escapeHtmlText(uploader?.username || '');
+      const safeId = escapeHtmlText(String(uploader?.id || uploadedBy || ''));
+      const avatar = uploader?.avatar
+        ? `<img src="${escapeAttr(uploader.avatar)}" alt="" class="author-avatar-img">`
+        : `<span class="author-avatar-text">${safeName.charAt(0).toUpperCase()}</span>`;
+      const cls = variant === 'card' ? 'image-card-author' : 'image-author';
+      return `
+        <button type="button" class="${cls}" data-user-id="${safeId}" data-username="${safeUsername}" aria-label="查看创作者 ${safeName}">
+          <span class="author-avatar">${avatar}</span>
+          <span class="author-name">${safeName}</span>
+        </button>
+      `;
+    }
+    function bindAuthorBadge(container) {
+      container.querySelectorAll('.image-card-author, .image-author').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const id = btn.dataset.userId;
+          const username = btn.dataset.username;
+          const identifier = username || id;
+          if (identifier && typeof window.openUserProfile === 'function') {
+            window.openUserProfile(identifier);
+          }
+        });
+      });
     }
 
     // === 修复: HTML/属性转义辅助函数 (防止 XSS) ===
@@ -212,6 +261,7 @@
         const safeDate = escapeHtmlText(img.date);
         const safeLocation = escapeHtmlText(img.location);
         const safeCategory = escapeHtmlText(getCategoryLabel(img.category));
+        const authorHtml = renderAuthorBadge(img.uploader, img.uploaded_by, 'card');
 
         card.innerHTML = `
           <div class="glow-border"></div>
@@ -232,6 +282,7 @@
             <div class="image-card-badge">
               <span class="badge-category">${safeCategory}</span>
               ${img.isNew ? '<span class="badge-new">NEW</span>' : ''}
+              ${img.area === 'paid' ? '<span class="badge-paid">付费区</span>' : ''}
             </div>
             ${views > 0 ? `
             <div class="view-count-badge">
@@ -240,6 +291,7 @@
             </div>
             ` : ''}
             <div class="image-card-info">
+              ${authorHtml}
               <div class="image-card-title">${safeTitle}</div>
               <div class="image-card-meta">${(safeDate || safeLocation) ? (safeDate + (safeDate && safeLocation ? ' · ' : '') + safeLocation) : ''}</div>
             </div>
@@ -318,6 +370,9 @@
       });
 
       observeCards();
+
+      // 绑定作者徽章点击事件
+      bindAuthorBadge(galleryGrid);
 
       // 初始化点赞 UI（登录用户会高亮已点赞按钮）
       if (typeof window.initLikesUI === 'function') {
@@ -432,6 +487,8 @@
   global.getCategoryLabel = getCategoryLabel;
   global.escapeHtmlText = escapeHtmlText;
   global.escapeAttr = escapeAttr;
+  global.renderAuthorBadge = renderAuthorBadge;
+  global.bindAuthorBadge = bindAuthorBadge;
   global.showSkeletonLoading = showSkeletonLoading;
   global.sortImages = sortImages;
   global.renderGallery = renderGallery;
