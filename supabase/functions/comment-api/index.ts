@@ -5,48 +5,13 @@
 // 数据层：通过 Service Role 操作 PostgreSQL
 // ============================
 
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0';
 import { verifyOrigin } from '../_shared/originGuard.ts';
 import { safeParseInt } from '../_shared/safeParams.ts';
-
-const CORS_HEADERS = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
-  'Access-Control-Allow-Headers': 'apikey, Authorization, Content-Type, x-client-info',
-  'Access-Control-Max-Age': '86400',
-};
-function createCorsResponse(body, status = 200) {
-  return new Response(JSON.stringify(body), {
-    status, headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
-  });
-}
-function createErrorResponse(message, status = 400) {
-  return createCorsResponse({ error: message }, status);
-}
-
-const SUPABASE_URL = Deno.env.get('SUPABASE_URL') || '';
-const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
-function createServiceClient() {
-  return createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
-    auth: { autoRefreshToken: false, persistSession: false },
-  });
-}
-
-const rateLimitStore = new Map();
-function checkRateLimit(key, maxRequests = 10, windowMs = 60000) {
-  const now = Date.now();
-  const entry = rateLimitStore.get(key);
-  if (!entry || now > entry.resetAt) {
-    const resetAt = now + windowMs;
-    rateLimitStore.set(key, { count: 1, resetAt });
-    return { allowed: true, remaining: maxRequests - 1, resetAt };
-  }
-  if (entry.count >= maxRequests) {
-    return { allowed: false, remaining: 0, resetAt: entry.resetAt };
-  }
-  entry.count += 1;
-  return { allowed: true, remaining: maxRequests - entry.count, resetAt: entry.resetAt };
-}
+import { getSiteSettings, parseBool } from '../_shared/siteSettings.ts';
+import { sendNotificationEmail } from '../_shared/emailNotifier.ts';
+import { CORS_HEADERS, createCorsResponse, createErrorResponse } from '../_shared/cors.ts';
+import { createServiceClient } from '../_shared/supabaseClient.ts';
+import { checkRateLimit } from '../_shared/rateLimiter.ts';
 
 const COMMENT_MAX_PER_MINUTE = 5;
 const COMMENT_WINDOW_MS = 60000;
@@ -271,7 +236,7 @@ async function handleCreateComment(req) {
   let authedUserId = null;
   if (user_token && typeof user_token === 'string') {
     try {
-      const verifyResp = await fetch(`${SUPABASE_URL}/functions/v1/auth-api/me`, {
+      const verifyResp = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/auth-api/me`, {
         headers: { 'Authorization': `Bearer ${user_token}` },
       });
       if (verifyResp.ok) {
@@ -284,13 +249,21 @@ async function handleCreateComment(req) {
   const cleanContent = await filterSensitiveWords(content.trim());
   const supabase = createServiceClient();
 
+  // 读取站点默认评论审核策略
+  const settings = await getSiteSettings(supabase, [
+    'site_name',
+    'default_comment_status',
+    'notify_on_pending_comment',
+  ]);
+  const defaultStatus = settings.default_comment_status === 'pending' ? 'pending' : 'approved';
+
   const baseInsert = {
     image_id, content: cleanContent,
     github_username: github_username || '匿名用户',
     github_avatar: github_avatar || null,
     rating: rating && rating >= 1 && rating <= 5 ? rating : null,
     parent_id: parent_id || null,
-    status: 'approved', source: 'local',
+    status: defaultStatus, source: 'local',
     likes_count: 0,
     created_at: new Date().toISOString(),
   };
@@ -314,6 +287,19 @@ async function handleCreateComment(req) {
   if (error) {
     console.error('创建评论失败: code=' + (error.code || '?') + ', msg=' + (error.message || '') + ', details=' + (error.details || '') + ', hint=' + (error.hint || ''));
     return createErrorResponse('创建评论失败: ' + (error.message || '未知错误'), 500);
+  }
+
+  // 待审核评论邮件通知管理员
+  if (comment && comment.status === 'pending' && parseBool(settings.notify_on_pending_comment)) {
+    try {
+      await sendNotificationEmail(supabase, {
+        subject: `[${settings.site_name || '站点'}] 有新评论待审核`,
+        text: `图片 ID: ${image_id}\n作者: ${comment.github_username || '匿名用户'}\n内容: ${(comment.content || '').slice(0, 200)}\n时间: ${comment.created_at}\n请登录管理后台处理。`,
+        tags: ['pending_comment'],
+      });
+    } catch (e) {
+      console.warn('待审核评论邮件通知失败:', e);
+    }
   }
 
   return createCorsResponse({

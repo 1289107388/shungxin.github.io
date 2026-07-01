@@ -5,40 +5,15 @@
 // 数据层：通过 Service Role 操作 PostgreSQL users / auth_sessions
 // ============================
 
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0';
 import { verifyOrigin } from '../_shared/originGuard.ts';
+import { getSiteSettings, parseBool } from '../_shared/siteSettings.ts';
+import { sendNotificationEmail } from '../_shared/emailNotifier.ts';
+import { CORS_HEADERS, createCorsResponse, createErrorResponse } from '../_shared/cors.ts';
+import { createServiceClient } from '../_shared/supabaseClient.ts';
+import { signToken, verifyToken, hashToken } from '../_shared/token.ts';
+import { checkRateLimit } from '../_shared/rateLimiter.ts';
 
-const CORS_HEADERS = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
-  'Access-Control-Allow-Headers': 'apikey, Authorization, Content-Type, x-client-info, X-Client-Token',
-  'Access-Control-Max-Age': '86400',
-};
-function createCorsResponse(body, status = 200) {
-  return new Response(JSON.stringify(body), {
-    status, headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
-  });
-}
-function createErrorResponse(message, status = 400) {
-  return createCorsResponse({ error: message }, status);
-}
-
-const SUPABASE_URL = Deno.env.get('SUPABASE_URL') || '';
-const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
-const AUTH_SECRET_RAW = Deno.env.get('AUTH_SECRET');
-// 修复: 移除硬编码回退值;未配置环境变量则抛错,
-// 避免任何人用源码里的默认值绕过鉴权
-if (!AUTH_SECRET_RAW || AUTH_SECRET_RAW.length < 32) {
-  throw new Error('AUTH_SECRET 环境变量未设置或长度不足 32 字符');
-}
-const AUTH_SECRET = AUTH_SECRET_RAW;
 const TOKEN_TTL_DAYS = 7;
-
-function createServiceClient() {
-  return createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
-    auth: { autoRefreshToken: false, persistSession: false },
-  });
-}
 
 // ============================
 // 工具：密码哈希 (PBKDF2-SHA256)
@@ -59,87 +34,6 @@ function generateSalt() {
   const bytes = new Uint8Array(16);
   crypto.getRandomValues(bytes);
   return Array.from(bytes).map((b) => b.toString(16).padStart(2, '0')).join('');
-}
-
-// ============================
-// 工具：Token 签发/校验 (HMAC-SHA256)
-// ============================
-function base64urlEncode(bytes) {
-  let str = '';
-  for (const b of bytes) str += String.fromCharCode(b);
-  return btoa(str).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-}
-function base64urlDecode(s) {
-  const padded = s.replace(/-/g, '+').replace(/_/g, '/') + '==='.slice((s.length + 3) % 4);
-  const bin = atob(padded);
-  const out = new Uint8Array(bin.length);
-  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
-  return out;
-}
-function utf8ToBytes(s) { return new TextEncoder().encode(s); }
-function bytesToUtf8(b) { return new TextDecoder().decode(b); }
-
-async function hmacSha256(key, data) {
-  const keyMaterial = await crypto.subtle.importKey(
-    'raw', typeof key === 'string' ? utf8ToBytes(key) : key,
-    { name: 'HMAC', hash: 'SHA-256' }, false, ['sign', 'verify']
-  );
-  const sig = await crypto.subtle.sign('HMAC', keyMaterial, utf8ToBytes(data));
-  return new Uint8Array(sig);
-}
-
-async function signToken(payload) {
-  const json = JSON.stringify(payload);
-  const payloadB64 = base64urlEncode(utf8ToBytes(json));
-  const signature = await hmacSha256(AUTH_SECRET, payloadB64);
-  const sigB64 = base64urlEncode(signature);
-  return `${payloadB64}.${sigB64}`;
-}
-
-async function verifyToken(token) {
-  if (!token || typeof token !== 'string') return null;
-  const parts = token.split('.');
-  if (parts.length !== 2) return null;
-  const [payloadB64, sigB64] = parts;
-
-  const expectedSig = await hmacSha256(AUTH_SECRET, payloadB64);
-  const providedSig = base64urlDecode(sigB64);
-  if (expectedSig.length !== providedSig.length) return null;
-  let diff = 0;
-  for (let i = 0; i < expectedSig.length; i++) diff |= expectedSig[i] ^ providedSig[i];
-  if (diff !== 0) return null;
-
-  let payload;
-  try { payload = JSON.parse(bytesToUtf8(base64urlDecode(payloadB64))); }
-  catch { return null; }
-
-  if (!payload.exp || Date.now() / 1000 > payload.exp) return null;
-  return payload;
-}
-
-async function hashToken(token) {
-  const bytes = utf8ToBytes(token);
-  const hash = await crypto.subtle.digest('SHA-256', bytes);
-  return base64urlEncode(new Uint8Array(hash));
-}
-
-// ============================
-// 限流
-// ============================
-const rateLimitStore = new Map();
-function checkRateLimit(key, maxRequests, windowMs) {
-  const now = Date.now();
-  const entry = rateLimitStore.get(key);
-  if (!entry || now > entry.resetAt) {
-    const resetAt = now + windowMs;
-    rateLimitStore.set(key, { count: 1, resetAt });
-    return { allowed: true, remaining: maxRequests - 1, resetAt };
-  }
-  if (entry.count >= maxRequests) {
-    return { allowed: false, remaining: 0, resetAt: entry.resetAt };
-  }
-  entry.count += 1;
-  return { allowed: true, remaining: maxRequests - entry.count, resetAt: entry.resetAt };
 }
 
 // ============================
@@ -221,7 +115,7 @@ async function handleRegister(req) {
     salt,
     display_name: display_name || username,
     role: 'user',
-  }).select('id, username, display_name, avatar, role, created_at').single();
+  }).select('id, uid, username, display_name, avatar, role, created_at').single();
   if (error) {
     console.error('创建用户失败:', error);
     return createErrorResponse('注册失败，请稍后重试', 500);
@@ -253,7 +147,7 @@ async function handleLogin(req) {
   const supabase = createServiceClient();
   const { data: row, error } = await supabase
     .from('users')
-    .select('id, username, display_name, avatar, role, password_hash, salt, is_active')
+    .select('id, uid, username, display_name, avatar, role, password_hash, salt, is_active')
     .eq('username', username).maybeSingle();
   if (error) { console.error('查询用户失败:', error); return createErrorResponse('登录失败', 500); }
   if (!row) return createErrorResponse('用户名或密码错误', 401);
@@ -265,15 +159,62 @@ async function handleLogin(req) {
   await supabase.from('users').update({ last_login_at: new Date().toISOString() }).eq('id', row.id);
 
   const user = {
-    id: row.id, username: row.username, display_name: row.display_name,
+    id: row.id, uid: row.uid, username: row.username, display_name: row.display_name,
     avatar: row.avatar, role: row.role,
   };
   const token = await issueToken(supabase, user, req);
+
+  // 异常登录检测与邮件通知
+  try {
+    await detectAbnormalLoginAndNotify(supabase, row, req);
+  } catch (e) {
+    console.warn('异常登录检测失败:', e);
+  }
+
   return createCorsResponse({
     success: true, message: '登录成功',
     user, token,
     rateLimit: { remaining: rateCheck.remaining, resetAt: new Date(rateCheck.resetAt).toISOString() },
   });
+}
+
+async function detectAbnormalLoginAndNotify(supabase, user, req) {
+  const settings = await getSiteSettings(supabase, [
+    'site_name',
+    'notify_on_abnormal_login',
+  ]);
+  if (!parseBool(settings.notify_on_abnormal_login)) return;
+
+  const currentIp = req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip') || 'unknown';
+  const userAgent = req.headers.get('user-agent') || 'unknown';
+
+  // 取该用户最近一次成功登录的 session IP 做对比(排除当前这次)
+  const { data: lastSessions } = await supabase
+    .from('auth_sessions')
+    .select('ip, user_agent, created_at')
+    .eq('user_id', user.id)
+    .order('created_at', { ascending: false })
+    .range(1, 2);
+
+  let abnormal = false;
+  let reason = '';
+  if (!lastSessions || lastSessions.length === 0) {
+    // 首次登录不告警
+    return;
+  }
+  const last = lastSessions[0];
+  if (last.ip && last.ip !== currentIp) {
+    abnormal = true;
+    reason = `IP 发生变化(上次: ${last.ip}, 本次: ${currentIp})`;
+  }
+
+  if (abnormal) {
+    await sendNotificationEmail(supabase, {
+      subject: `[${settings.site_name || '站点'}] 账号异常登录提醒`,
+      text: `用户: ${user.username}\n时间: ${new Date().toISOString()}\n${reason}\nUA: ${userAgent}\n如非本人操作,请尽快修改密码并检查账号安全。`,
+      tags: ['abnormal_login'],
+    });
+  }
 }
 
 async function handleLogout(req) {
@@ -345,7 +286,7 @@ async function issueToken(supabase, user, req) {
   const now = Math.floor(Date.now() / 1000);
   const exp = now + TOKEN_TTL_DAYS * 24 * 60 * 60;
   const token = await signToken({
-    sub: user.id, username: user.username, role: user.role,
+    sub: user.id, uid: user.uid, username: user.username, role: user.role,
     iat: now, exp, v: 1,
   });
   const tokenHash = await hashToken(token);
@@ -383,12 +324,12 @@ async function requireAuth(req) {
   }
 
   const { data: row } = await supabase
-    .from('users').select('id, username, display_name, avatar, role, is_active')
+    .from('users').select('id, uid, username, display_name, avatar, role, is_active')
     .eq('id', payload.sub).maybeSingle();
   if (!row || !row.is_active) return { error: createErrorResponse('账号已被禁用', 403) };
 
   return { user: {
-    id: row.id, username: row.username, display_name: row.display_name,
+    id: row.id, uid: row.uid, username: row.username, display_name: row.display_name,
     avatar: row.avatar, role: row.role,
   }};
 }

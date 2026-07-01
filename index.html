@@ -16,7 +16,9 @@
   <meta name="twitter:title" content="双薪写真画廊">
   <meta name="twitter:description" content="记录美好瞬间，定格珍贵回忆">
   <meta name="twitter:image" content="https://shungxin.github.io/images/1782210152459.png">
-  <link rel="stylesheet" href="css/styles.css">
+  <link rel="stylesheet" href="css/styles.css?v=4">
+  <!-- AOS animate on scroll -->
+  <link rel="stylesheet" href="css/aos.css">
 </head>
 <body>
 
@@ -30,6 +32,7 @@
     <ul class="nav-links">
       <li><a class="active" data-section="gallery">Gallery</a></li>
       <li><a href="creators.html">Creators</a></li>
+      <li><a href="collections.html">图集</a></li>
       <li><a href="paid.html">免费区</a></li>
       <li><a data-section="footer">About</a></li>
       <li>
@@ -75,17 +78,44 @@
     <button class="mobile-nav-close" id="mobileNavClose">✕</button>
     <a data-section="gallery">Gallery</a>
     <a href="creators.html">Creators</a>
+    <a href="collections.html">图集</a>
     <a href="paid.html">free区</a>
     <a data-section="footer">About</a>
     <a data-section="comments" id="mobileNavComments">评论</a>
   </div>
 
+  <!-- 站点公告 -->
+  <div id="siteAnnouncement" class="site-announcement hidden"></div>
+
+  <!-- 首页 Hero 大图 -->
+  <section class="hero-section hidden" id="heroSection" aria-label="首页横幅">
+    <div class="hero-bg" id="heroBg">
+      <img class="hero-img" id="heroImg" src="" alt="" loading="eager" />
+      <div class="hero-overlay"></div>
+      <div class="hero-vignette"></div>
+    </div>
+    <div class="hero-content">
+      <h1 class="hero-title" id="heroTitle"></h1>
+      <p class="hero-subtitle" id="heroSubtitle"></p>
+      <a class="hero-cta" id="heroCta" href="#gallery">
+        <span class="hero-cta-text" id="heroCtaText"></span>
+        <span class="hero-cta-glow"></span>
+      </a>
+    </div>
+    <button class="hero-scroll" id="heroScroll" aria-label="向下滚动">
+      <span class="hero-scroll-mouse">
+        <span class="hero-scroll-wheel"></span>
+      </span>
+      <span class="hero-scroll-text">探索画廊</span>
+    </button>
+  </section>
+
   <!-- Gallery -->
   <section class="gallery-section" id="gallery">
-    <div class="gallery-header">
-      <h2 class="gallery-title">双薪写真画廊</h2>
-      <p class="gallery-subtitle">记录美好瞬间，定格珍贵回忆 — 悬停感受光晕与视差</p>
-      <div class="gallery-filters">
+    <div class="gallery-header" data-aos="fade-down">
+      <h2 class="gallery-title" data-aos="fade-up" data-aos-delay="100">双薪写真画廊</h2>
+      <p class="gallery-subtitle" data-aos="fade-up" data-aos-delay="200">记录美好瞬间，定格珍贵回忆 — 悬停感受光晕与视差</p>
+      <div class="gallery-filters" data-aos="fade-up" data-aos-delay="300">
         <button class="filter-btn active" data-filter="all">全部</button>
         <button class="filter-btn" data-filter="landscape">风景</button>
         <button class="filter-btn" data-filter="city">城市</button>
@@ -381,12 +411,13 @@
 
   <!-- 配置中心:所有 API 地址、常量、配置项的唯一来源 -->
   <!-- 必须在所有业务 JS 之前加载 -->
-  <script src="js/config.js"></script>
+  <script src="js/config.js?v=2"></script>
+  <script src="js/siteSettings.js?v=3"></script>
   <script src="js/utils.js"></script>
   <script src="js/eventBus.js"></script>
 
   <!-- 画廊模块 -->
-  <script src="js/gallery.js"></script>
+  <script src="js/gallery.js?v=3"></script>
   <!-- 导航和 Toast -->
   <script src="js/nav.js"></script>
   <!-- 主题切换 -->
@@ -406,54 +437,24 @@
   <!-- 用户资料弹窗 -->
   <script src="js/userProfile.js"></script>
 
-  <!-- 用户上传图片模态框 -->
-  <div id="uploadModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);backdrop-filter:blur(4px);z-index:10000;align-items:center;justify-content:center;">
-    <div style="background:var(--color-bg,#1a1d24);border-radius:12px;width:min(480px,92vw);max-height:90vh;overflow-y:auto;color:#e6e8ed;box-shadow:0 24px 60px rgba(0,0,0,0.5);">
-      <div style="padding:18px 20px;border-bottom:1px solid #2d3340;display:flex;justify-content:space-between;align-items:center;">
-        <h3 style="font-size:16px;margin:0;">📷 上传作品</h3>
-        <button id="uploadCloseBtn" style="background:none;border:none;color:#9ba1ad;font-size:22px;cursor:pointer;line-height:1;">×</button>
-      </div>
-      <form id="userUploadForm" style="padding:18px 20px;display:flex;flex-direction:column;gap:14px;">
-        <div>
-          <label style="display:block;font-size:12px;color:#9ba1ad;margin-bottom:6px;">选择文件 *</label>
-          <input type="file" id="userUploadFile" accept="image/*" required style="width:100%;padding:10px;background:#232830;border:1px solid #2d3340;border-radius:6px;color:#e6e8ed;font-size:13px;">
-          <div style="font-size:11px;color:#6b7280;margin-top:4px;">支持 jpg/png/webp,单图 ≤ 10MB,上传后自动压缩为 WebP</div>
-        </div>
-        <div>
-          <label style="display:block;font-size:12px;color:#9ba1ad;margin-bottom:6px;">标题</label>
-          <input type="text" id="userUploadTitle" maxlength="128" placeholder="给作品起个名字" style="width:100%;padding:9px 12px;background:#232830;border:1px solid #2d3340;border-radius:6px;color:#e6e8ed;font-size:13px;">
-        </div>
-        <div>
-          <label style="display:block;font-size:12px;color:#9ba1ad;margin-bottom:6px;">分类</label>
-          <select id="userUploadCategory" style="width:100%;padding:9px 12px;background:#232830;border:1px solid #2d3340;border-radius:6px;color:#e6e8ed;font-size:13px;">
-            <option value="portrait">人像</option>
-            <option value="landscape">风景</option>
-            <option value="street">街拍</option>
-            <option value="other">其他</option>
-          </select>
-        </div>
-        <div>
-          <label style="display:block;font-size:12px;color:#9ba1ad;margin-bottom:6px;">描述(可选)</label>
-          <textarea id="userUploadDesc" rows="2" maxlength="500" placeholder="说说这张图的故事..." style="width:100%;padding:9px 12px;background:#232830;border:1px solid #2d3340;border-radius:6px;color:#e6e8ed;font-size:13px;resize:vertical;"></textarea>
-        </div>
-        <div style="background:rgba(96,165,250,0.1);border:1px solid rgba(96,165,250,0.3);border-radius:6px;padding:10px 12px;font-size:12px;color:#60a5fa;">
-          ℹ️ 上传后需管理员审核通过后才会在画廊显示,审核通常在 24 小时内完成。
-        </div>
-        <div id="uploadProgress2" style="display:none;">
-          <div style="font-size:12px;color:#9ba1ad;margin-bottom:6px;" id="uploadStatus2">上传中…</div>
-          <div style="height:6px;background:#232830;border-radius:3px;overflow:hidden;">
-            <div id="uploadBar2" style="height:100%;background:#4f8eff;width:0%;transition:width 0.2s;"></div>
-          </div>
-        </div>
-        <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:6px;">
-          <button type="button" id="userUploadCancelBtn" style="padding:9px 18px;background:#232830;color:#e6e8ed;border:1px solid #2d3340;border-radius:6px;cursor:pointer;font-size:14px;">取消</button>
-          <button type="submit" id="userUploadSubmitBtn" style="padding:9px 22px;background:#4f8eff;color:white;border:none;border-radius:6px;cursor:pointer;font-size:14px;">上传</button>
-        </div>
-      </form>
-    </div>
-  </div>
-  <!-- 图片上传 -->
+  <!-- 图片上传组件（模态框由 js/upload.js 动态创建，支持批量） -->
   <script src="js/upload.js"></script>
+
+  <!-- AOS scroll animations -->
+  <script src="js/aos.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      if (window.AOS) {
+        AOS.init({
+          duration: 700,
+          easing: 'ease-out-cubic',
+          once: true,
+          offset: 80,
+          disable: window.matchMedia('(prefers-reduced-motion: reduce)').matches
+        });
+      }
+    });
+  </script>
 
 </body>
 </html>

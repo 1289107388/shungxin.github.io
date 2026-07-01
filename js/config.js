@@ -37,6 +37,7 @@
       adminApi: 'admin-api',
       storageMonitor: 'storage-monitor',
       paidAreaAuth: 'paid-area-auth',
+      collectionsApi: 'collections-api',
     },
 
     // ==================== Storage(本地/Supabase Storage 资源) ====================
@@ -110,7 +111,8 @@
      * @returns {string}
      */
     getFunctionUrl(functionName, path) {
-      const base = this.SUPABASE.url + '/functions/v1/' + functionName;
+      const slug = this.FUNCTIONS[functionName] || functionName;
+      const base = this.SUPABASE.url + '/functions/v1/' + slug;
       return path ? base + '/' + path : base;
     },
 

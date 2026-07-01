@@ -7,7 +7,8 @@
   <meta name="description" content="双薪写真画廊免费区 - 高质量创作者专属内容">
   <meta property="og:title" content="免费区 | 双薪写真画廊">
   <meta property="og:description" content="高质量创作者专属内容">
-  <link rel="stylesheet" href="css/styles.css">
+  <link rel="stylesheet" href="css/styles.css?v=3">
+  <link rel="stylesheet" href="css/aos.css">
   <script>window.__PAID_AREA_MODE = true;</script>
 </head>
 <body>
@@ -21,6 +22,7 @@
     <ul class="nav-links">
       <li><a href="index.html">Gallery</a></li>
       <li><a href="creators.html">Creators</a></li>
+      <li><a href="collections.html">图集</a></li>
       <li><a class="active" href="paid.html">免费区</a></li>
       <li><a href="index.html#footer">About</a></li>
     </ul>
@@ -59,6 +61,7 @@
     <button class="mobile-nav-close" id="mobileNavClose">✕</button>
     <a href="index.html">Gallery</a>
     <a href="creators.html">Creators</a>
+    <a href="collections.html">图集</a>
     <a class="active" href="paid.html">免费区</a>
     <a href="index.html#footer">About</a>
   </div>
@@ -83,9 +86,9 @@
 
   <!-- 付费区画廊 -->
   <section class="gallery-section paid-area-section" id="paidAreaHero">
-    <div class="gallery-header">
-      <h2 class="gallery-title">付费区作品</h2>
-      <p class="gallery-subtitle">高质量创作者专属内容，按点赞/浏览量排序</p>
+    <div class="gallery-header" data-aos="fade-down">
+      <h2 class="gallery-title" data-aos="fade-up" data-aos-delay="100">付费区作品</h2>
+      <p class="gallery-subtitle" data-aos="fade-up" data-aos-delay="200">高质量创作者专属内容，按点赞/浏览量排序</p>
       <div class="paid-area-toolbar">
         <button class="btn-ghost" id="paidAreaLogout" type="button">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></svg>
@@ -109,6 +112,15 @@
       </div>
     </div>
     <div class="gallery-grid" id="paidGalleryGrid"></div>
+  </section>
+
+  <!-- 付费区合集 -->
+  <section class="gallery-section collections-section" id="paidCollections">
+    <div class="gallery-header" data-aos="fade-down">
+      <h2 class="gallery-title" data-aos="fade-up" data-aos-delay="100">付费区合集</h2>
+      <p class="gallery-subtitle" data-aos="fade-up" data-aos-delay="200">按主题浏览专属内容</p>
+    </div>
+    <div id="paidCollectionsContainer"></div>
   </section>
 
   <!-- 认证模态框 -->
@@ -251,7 +263,7 @@
   <script src="js/utils.js"></script>
   <script src="js/eventBus.js"></script>
   <script src="js/paidArea.js"></script>
-  <script src="js/gallery.js"></script>
+  <script src="js/gallery.js?v=2"></script>
   <script src="js/nav.js"></script>
   <script src="js/theme.js"></script>
   <script src="js/particles.js"></script>
@@ -259,6 +271,29 @@
   <script src="js/api.js"></script>
   <script src="js/auth.js"></script>
   <script src="js/userProfile.js"></script>
+  <script src="js/upload.js"></script>
+  <script src="js/collections.js?v=3"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      // 等付费区验证通过后再加载合集
+      const tryLoad = () => {
+        if (window.Collections && window.isPaidAreaAuthenticated && window.isPaidAreaAuthenticated()) {
+          Collections.renderList('paidCollectionsContainer', 'paid');
+        }
+      };
+      tryLoad();
+      setInterval(tryLoad, 1000);
+    });
+  </script>
+
+  <script src="js/aos.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      if (window.AOS) {
+        AOS.init({ duration: 700, easing: 'ease-out-cubic', once: true, offset: 80, disable: window.matchMedia('(prefers-reduced-motion: reduce)').matches });
+      }
+    });
+  </script>
 
 </body>
 </html>

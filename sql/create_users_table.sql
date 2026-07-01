@@ -17,9 +17,34 @@ CREATE TABLE IF NOT EXISTS public.users (
   is_active     BOOLEAN      NOT NULL DEFAULT TRUE
 );
 
+-- 2. 用户公开 UID（默认等于自增 id，可用于分享/展示）
+ALTER TABLE public.users
+  ADD COLUMN IF NOT EXISTS uid BIGINT UNIQUE;
+
+-- 回填现有用户 uid = id
+UPDATE public.users SET uid = id WHERE uid IS NULL;
+
+-- 新用户若未指定 uid，则自动设为 id
+CREATE OR REPLACE FUNCTION public.set_user_uid()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF NEW.uid IS NULL THEN
+    NEW.uid := NEW.id;
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_set_user_uid ON public.users;
+CREATE TRIGGER trg_set_user_uid
+  BEFORE INSERT ON public.users
+  FOR EACH ROW
+  EXECUTE FUNCTION public.set_user_uid();
+
 -- 2. 索引
 CREATE INDEX IF NOT EXISTS idx_users_username ON public.users (username);
 CREATE INDEX IF NOT EXISTS idx_users_role     ON public.users (role);
+CREATE INDEX IF NOT EXISTS idx_users_uid      ON public.users (uid);
 
 -- 3. RLS 启用
 ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;

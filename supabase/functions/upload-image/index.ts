@@ -8,105 +8,47 @@
 // 限制: 单图 10MB;jpg/png/webp/heic/avif
 // ============================
 
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0';
 import { verifyOrigin } from '../_shared/originGuard.ts';
 import { checkRateLimit } from '../_shared/rateLimiter.ts';
+import { getSiteSettings, parseIntSafe, parseBool, parseFormats } from '../_shared/siteSettings.ts';
+import { CORS_HEADERS, createCorsResponse, createErrorResponse } from '../_shared/cors.ts';
+import { createServiceClient } from '../_shared/supabaseClient.ts';
+import { verifyToken } from '../_shared/token.ts';
 // 注: 暂不压缩(避免 Deno Deploy 上 sharp/jsquash 的兼容问题)
 // 用户上传原图直接存,后续可挂 Cloudflare Images / imgproxy 做边缘压缩
 
-const SUPABASE_URL = Deno.env.get('SUPABASE_URL') || '';
-const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
-const AUTH_SECRET_RAW = Deno.env.get('AUTH_SECRET');
-if (!AUTH_SECRET_RAW || AUTH_SECRET_RAW.length < 32) {
-  throw new Error('AUTH_SECRET 环境变量未设置或长度不足 32 字符');
-}
-const AUTH_SECRET = AUTH_SECRET_RAW;
 const BUCKET = 'gallery-images';
 
 // upload-image 的限流: 30 次/分钟/IP(防止刷配额)
 // 注: 真正精细的每日 5 张限制在 handleUpload 里靠 user_id 计数
 const UPLOAD_RATE_LIMIT_PER_MIN = 30;
 
-// ---------- CORS ----------
-const CORS_HEADERS = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
-  'Access-Control-Allow-Headers': 'apikey, Authorization, Content-Type, x-client-info, X-Client-Token',
-  'Access-Control-Max-Age': '86400',
-};
-function cors(body, status = 200) {
-  return new Response(JSON.stringify(body), {
-    status, headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
-  });
-}
-function err(message, status = 400) {
-  return cors({ error: message }, status);
-}
-
-// ---------- Token 验证 (与 admin-api 一致) ----------
-function base64urlEncode(bytes) {
-  let s = '';
-  for (const b of bytes) s += String.fromCharCode(b);
-  return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-}
-function base64urlDecode(s) {
-  const padded = s.replace(/-/g, '+').replace(/_/g, '/') + '==='.slice((s.length + 3) % 4);
-  const bin = atob(padded);
-  const out = new Uint8Array(bin.length);
-  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
-  return out;
-}
-async function hmacSha256(key, data) {
-  const km = await crypto.subtle.importKey(
-    'raw', typeof key === 'string' ? new TextEncoder().encode(key) : key,
-    { name: 'HMAC', hash: 'SHA-256' }, false, ['sign'],
-  );
-  return new Uint8Array(await crypto.subtle.sign('HMAC', km, new TextEncoder().encode(data)));
-}
-async function verifyToken(token) {
-  if (!token || typeof token !== 'string') return null;
-  const [pb64, sb64] = token.split('.');
-  if (!pb64 || !sb64) return null;
-  const expected = await hmacSha256(AUTH_SECRET, pb64);
-  const provided = base64urlDecode(sb64);
-  if (expected.length !== provided.length) return null;
-  let diff = 0;
-  for (let i = 0; i < expected.length; i++) diff |= expected[i] ^ provided[i];
-  if (diff !== 0) return null;
-  let payload;
-  try { payload = JSON.parse(new TextDecoder().decode(base64urlDecode(pb64))); }
-  catch { return null; }
-  if (!payload.exp || Date.now() / 1000 > payload.exp) return null;
-  return payload;
-}
-async function requireAdmin(req) {
+async function requireUploader(req) {
   const token = (req.headers.get('authorization') || '').replace(/^Bearer\s+/i, '').trim();
-  if (!token) return { error: err('未登录', 401) };
+  if (!token) return { error: createErrorResponse('未登录', 401) };
   const payload = await verifyToken(token);
-  if (!payload) return { error: err('Token 无效或已过期', 401) };
-  const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
-    auth: { autoRefreshToken: false, persistSession: false },
-  });
+  if (!payload) return { error: createErrorResponse('Token 无效或已过期', 401) };
+  const supabase = createServiceClient();
   const { data: row } = await supabase
     .from('users')
     .select('id, username, display_name, role, is_active')
     .eq('id', payload.sub)
     .maybeSingle();
-  if (!row) return { error: err('用户不存在', 401) };
-  if (!row.is_active) return { error: err('账号已被禁用', 403) };
+  if (!row) return { error: createErrorResponse('用户不存在', 401) };
+  if (!row.is_active) return { error: createErrorResponse('账号已被禁用', 403) };
   // 改造: 允许 user 和 admin 两种角色上传
   // - admin 上传的图默认立即可见 (is_visible=true)
   // - user  上传的图默认待审核 (is_visible=false), admin 在后台通过后才可见
-  if (row.role !== 'admin' && row.role !== 'user') return { error: err('无上传权限', 403) };
+  if (row.role !== 'admin' && row.role !== 'user') return { error: createErrorResponse('无上传权限', 403) };
   return { user: row };
 }
 
 // ---------- 用户上传限流 (每用户每天 5 张) ----------
 const userUploadCounts = new Map(); // key: user_id, value: { count, resetAt }
-function checkUserUploadLimit(userId) {
+function checkUserUploadLimit(userId, maxDaily = 5) {
   const now = Date.now();
   const DAY = 24 * 60 * 60 * 1000;
-  const MAX = 5;
+  const MAX = maxDaily;
   const entry = userUploadCounts.get(userId);
   if (!entry || now > entry.resetAt) {
     userUploadCounts.set(userId, { count: 1, resetAt: now + DAY });
@@ -155,6 +97,30 @@ function parseImageDimensions(bytes, mime) {
 function readU32BE(b, o) { return (b[o] << 24) | (b[o + 1] << 16) | (b[o + 2] << 8) | b[o + 3]; }
 function readU16BE(b, o) { return (b[o] << 8) | b[o + 1]; }
 function readU16LE(b, o) { return b[o] | (b[o + 1] << 8); }
+
+function buildMimeTypes(formats) {
+  const map = {
+    jpg: 'image/jpeg', jpeg: 'image/jpeg',
+    png: 'image/png', webp: 'image/webp',
+    gif: 'image/gif',
+    heic: 'image/heic', heif: 'image/heif',
+    avif: 'image/avif', avis: 'image/avif',
+    bmp: 'image/bmp',
+  };
+  const set = new Set();
+  for (const f of formats) {
+    if (map[f]) set.add(map[f]);
+  }
+  return Array.from(set);
+}
+
+function formatBytes(bytes) {
+  if (bytes === 0) return '0 B';
+  const k = 1024;
+  const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+}
 
 // ===== P0-1.3: 魔数二次校验 =====
 // 给定文件前 16 字节 + 声明的 MIME,验证文件头是否匹配
@@ -207,7 +173,7 @@ Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { status: 204, headers: CORS_HEADERS });
   }
-  if (req.method !== 'POST') return err('仅支持 POST', 405);
+  if (req.method !== 'POST') return createErrorResponse('仅支持 POST', 405);
 
   // 限流:按 IP,30 次/分钟
   // 真实部署时,Supabase Edge Function 拿不到真实 IP(只能拿到 Deno 内部 IP),
@@ -217,7 +183,7 @@ Deno.serve(async (req) => {
     || 'unknown';
   const rl = checkRateLimit(`upload:${clientIp}`, UPLOAD_RATE_LIMIT_PER_MIN, 60_000);
   if (!rl.allowed) {
-    return err(`上传过于频繁,请稍后再试(每分钟最多 ${UPLOAD_RATE_LIMIT_PER_MIN} 次)`, 429);
+    return createErrorResponse(`上传过于频繁,请稍后再试(每分钟最多 ${UPLOAD_RATE_LIMIT_PER_MIN} 次)`, 429);
   }
 
   try {
@@ -225,37 +191,62 @@ Deno.serve(async (req) => {
   } catch (e) {
     console.error('upload-image 未捕获错误:', e);
     const msg = (e && e.message) || String(e);
-    return err('服务器内部错误: ' + msg, 500);
+    return createErrorResponse('服务器内部错误: ' + msg, 500);
   }
 });
 
 async function handleUpload(req) {
+  console.log('[upload] handleUpload start');
+  // 0) 读取全局上传配置
+  const supabase = createServiceClient();
+  const settings = await getSiteSettings(supabase, [
+    'allow_user_upload',
+    'upload_max_size_bytes',
+    'upload_allowed_formats',
+    'upload_compression_threshold_bytes',
+    'upload_daily_limit_user',
+  ]);
+  console.log('[upload] settings loaded');
+  const allowUserUpload = parseBool(settings.allow_user_upload);
+  const maxSizeBytes = parseIntSafe(settings.upload_max_size_bytes, 10 * 1024 * 1024);
+  const allowedFormatList = parseFormats(settings.upload_allowed_formats);
+  const compressionThreshold = parseIntSafe(settings.upload_compression_threshold_bytes, 1024 * 1024);
+  const dailyLimitUser = parseIntSafe(settings.upload_daily_limit_user, 5);
+
   // 1) 鉴权 (user 或 admin)
-  const auth = await requireAdmin(req);
+  console.log('[upload] auth start');
+  const auth = await requireUploader(req);
+  console.log('[upload] auth done', auth.error ? 'error' : 'ok');
   if (auth.error) return auth.error;
   const user = auth.user;
   const isAdmin = user.role === 'admin';
 
-  // 1b) 普通用户限流:每天 5 张
+  // 1a) 用户上传总开关
+  if (!isAdmin && !allowUserUpload) {
+    return createErrorResponse('当前站点已关闭用户上传,请联系管理员', 403);
+  }
+
+  // 1b) 普通用户限流:按后台配置每日上限
   if (!isAdmin) {
-    const rl = checkUserUploadLimit(user.id);
+    const rl = checkUserUploadLimit(user.id, dailyLimitUser);
     if (!rl.allowed) {
       const hours = Math.ceil((rl.resetAt - Date.now()) / 3600000);
-      return err(`今日上传已达上限(5 张),请 ${hours} 小时后再试`, 429);
+      return createErrorResponse(`今日上传已达上限(${dailyLimitUser} 张),请 ${hours} 小时后再试`, 429);
     }
   }
 
   // 2) 解析 multipart/form-data
   const contentType = req.headers.get('content-type') || '';
   if (!contentType.includes('multipart/form-data')) {
-    return err('Content-Type 必须是 multipart/form-data', 400);
+    return createErrorResponse('Content-Type 必须是 multipart/form-data', 400);
   }
   let form;
   try { form = await req.formData(); }
-  catch (e) { return err('multipart 解析失败: ' + e.message, 400); }
+  catch (e) { console.error('[upload] formData error:', e); return createErrorResponse('multipart 解析失败: ' + e.message, 400); }
+  console.log('[upload] formData parsed');
 
   const file = form.get('file');
-  if (!file || !(file instanceof File)) return err('缺少 file 字段', 400);
+  if (!file || !(file instanceof File)) return createErrorResponse('缺少 file 字段', 400);
 
   // 可选字段
   const title = (form.get('title') || '').toString().trim() || null;
@@ -270,20 +261,25 @@ async function handleUpload(req) {
   const finalArea = isAdmin ? area : 'public';
 
   // 3) 校验
-  const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif', 'image/avif'];
+  const allowedTypes = buildMimeTypes(allowedFormatList);
   if (!allowedTypes.includes(file.type)) {
-    return err(`不支持的图片类型: ${file.type},仅支持 jpg/png/webp/heic/avif`, 400);
+    return createErrorResponse(`不支持的图片类型: ${file.type},站点允许格式: ${allowedFormatList.join(', ')}`, 400);
   }
-  if (file.size > 10 * 1024 * 1024) {
-    return err('图片大小不能超过 10MB', 400);
+  if (file.size > maxSizeBytes) {
+    return createErrorResponse(`图片大小不能超过 ${formatBytes(maxSizeBytes)}`, 400);
   }
-  if (file.size === 0) return err('文件为空', 400);
+  if (file.size === 0) return createErrorResponse('文件为空', 400);
+
+  // 3a) 压缩阈值提示(当前仅记录,压缩实现待后续接入 sharp/imgproxy)
+  if (file.size > compressionThreshold) {
+    console.log(`[upload] 图片 ${file.name} 大小 ${file.size} 超过压缩阈值 ${compressionThreshold},建议压缩`);
+  }
 
   // 3a) P0-1.3: 文件名黑名单(防止脚本/可执行文件伪装)
   const fname = (file.name || '').toLowerCase();
   const blockedExts = ['.php', '.exe', '.sh', '.bat', '.cmd', '.js', '.html', '.htm', '.svg', '.xml', '.asp', '.aspx', '.jsp', '.cgi', '.pl', '.py', '.phtml', '.phar'];
   for (const ext of blockedExts) {
-    if (fname.endsWith(ext)) return err(`文件名后缀不允许: ${ext}`, 400);
+    if (fname.endsWith(ext)) return createErrorResponse(`文件名后缀不允许: ${ext}`, 400);
   }
 
   // 3b) P0-1.3: 魔数二次校验(防绕过浏览器直接打 API)
@@ -291,7 +287,7 @@ async function handleUpload(req) {
   const headerBytes = new Uint8Array(await file.slice(0, 16).arrayBuffer());
   const magicCheck = verifyImageMagicHeader(headerBytes, file.type);
   if (!magicCheck.ok) {
-    return err(`文件内容与扩展名不符: ${magicCheck.reason}`, 400);
+    return createErrorResponse(`文件内容与扩展名不符: ${magicCheck.reason}`, 400);
   }
 
   // 4) 暂不压缩: 原图直接使用(保持原 mime 和扩展名)
@@ -316,9 +312,7 @@ async function handleUpload(req) {
   const storagePath = `${yyyy}/${mm}/${dd}/${rand}.${ext}`;
 
   // 6) 上传到 Storage
-  const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
-    auth: { autoRefreshToken: false, persistSession: false },
-  });
+  console.log('[upload] uploading to storage', storagePath);
   const { error: upErr } = await supabase.storage
     .from(BUCKET)
     .upload(storagePath, inputBytes, {
@@ -326,9 +320,10 @@ async function handleUpload(req) {
       cacheControl: '31536000',     // 1 年缓存(图片 hash 在路径里,改名即失效)
       upsert: false,
     });
+  console.log('[upload] storage result', upErr ? 'error' : 'ok');
   if (upErr) {
     console.error('Storage 上传失败:', upErr);
-    return err('存储失败: ' + upErr.message, 500);
+    return createErrorResponse('存储失败: ' + upErr.message, 500);
   }
 
   // 7) 写 gallery_images 表
@@ -357,11 +352,12 @@ async function handleUpload(req) {
     })
     .select('id, filename, title, category, area, is_visible, is_new, sort_order, description, created_at, width, height, size_bytes, storage_path, storage_bucket, uploaded_by')
     .single();
+  console.log('[upload] db insert result', insErr ? 'error' : 'ok');
   if (insErr) {
     // 失败回滚(删除刚上传的文件)
     await supabase.storage.from(BUCKET).remove([storagePath]);
     console.error('插入 gallery_images 失败:', insErr);
-    return err('数据库写入失败: ' + insErr.message, 500);
+    return createErrorResponse('数据库写入失败: ' + insErr.message, 500);
   }
 
   // 8) 写审计日志
@@ -383,8 +379,8 @@ async function handleUpload(req) {
   } catch (e) { console.warn('审计日志写入失败:', e); }
 
   // 9) 返回完整数据
-  const publicUrl = `${SUPABASE_URL}/storage/v1/object/public/${BUCKET}/${storagePath}`;
-  return cors({
+  const publicUrl = `${Deno.env.get('SUPABASE_URL')}/storage/v1/object/public/${BUCKET}/${storagePath}`;
+  return createCorsResponse({
     success: true,
     data: {
       ...row,

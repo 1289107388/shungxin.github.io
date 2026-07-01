@@ -359,6 +359,14 @@
       dropdown.hidden = true;
       openChangePwdModal();
     });
+    document.getElementById('userMenuUpload')?.addEventListener('click', () => {
+      dropdown.hidden = true;
+      if (global.Upload && typeof global.Upload.open === 'function') {
+        global.Upload.open();
+      } else if (global.showToast) {
+        global.showToast('上传组件加载中，请稍后再试', 'info');
+      }
+    });
     document.getElementById('userMenuLogout')?.addEventListener('click', async () => {
       dropdown.hidden = true;
       if (!confirm('确定要退出登录吗？')) return;

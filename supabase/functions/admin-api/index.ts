@@ -5,102 +5,16 @@
 // 数据层：通过 Service Role 操作 PostgreSQL
 // ============================
 
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0';
 import bcrypt from 'https://esm.sh/bcryptjs@2.4.3';
 import { verifyOrigin } from '../_shared/originGuard.ts';
 import { safeParseInt } from '../_shared/safeParams.ts';
+import { getSiteSettings, parseIntSafe, parseBool } from '../_shared/siteSettings.ts';
+import { createServiceClient } from '../_shared/supabaseClient.ts';
+import { CORS_HEADERS, createCorsResponse, createErrorResponse } from '../_shared/cors.ts';
+import { checkRateLimit } from '../_shared/rateLimiter.ts';
+import { verifyToken } from '../_shared/token.ts';
 
-const CORS_HEADERS = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
-  'Access-Control-Allow-Headers': 'apikey, Authorization, Content-Type, x-client-info, X-Client-Token',
-  'Access-Control-Max-Age': '86400',
-};
-function createCorsResponse(body, status = 200) {
-  return new Response(JSON.stringify(body), {
-    status, headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
-  });
-}
-function createErrorResponse(message, status = 400) {
-  return createCorsResponse({ error: message }, status);
-}
-
-const SUPABASE_URL = Deno.env.get('SUPABASE_URL') || '';
-const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
-const AUTH_SECRET_RAW = Deno.env.get('AUTH_SECRET');
-if (!AUTH_SECRET_RAW || AUTH_SECRET_RAW.length < 32) {
-  throw new Error('AUTH_SECRET 环境变量未设置或长度不足 32 字符');
-}
-const AUTH_SECRET = AUTH_SECRET_RAW;
 const TOKEN_TTL_DAYS = 7;
-
-function createServiceClient() {
-  return createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
-    auth: { autoRefreshToken: false, persistSession: false },
-  });
-}
-
-// ============================
-// Token 工具(复用 auth-api 的 HMAC-SHA256 签发)
-// ============================
-function base64urlEncode(bytes) {
-  let str = '';
-  for (const b of bytes) str += String.fromCharCode(b);
-  return btoa(str).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-}
-function base64urlDecode(s) {
-  const padded = s.replace(/-/g, '+').replace(/_/g, '/') + '==='.slice((s.length + 3) % 4);
-  const bin = atob(padded);
-  const out = new Uint8Array(bin.length);
-  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
-  return out;
-}
-function utf8ToBytes(s) { return new TextEncoder().encode(s); }
-function bytesToUtf8(b) { return new TextDecoder().decode(b); }
-
-async function hmacSha256(key, data) {
-  const keyMaterial = await crypto.subtle.importKey(
-    'raw', typeof key === 'string' ? utf8ToBytes(key) : key,
-    { name: 'HMAC', hash: 'SHA-256' }, false, ['sign', 'verify']
-  );
-  return new Uint8Array(await crypto.subtle.sign('HMAC', keyMaterial, utf8ToBytes(data)));
-}
-async function verifyToken(token) {
-  if (!token || typeof token !== 'string') return null;
-  const parts = token.split('.');
-  if (parts.length !== 2) return null;
-  const [payloadB64, sigB64] = parts;
-  const expectedSig = await hmacSha256(AUTH_SECRET, payloadB64);
-  const providedSig = base64urlDecode(sigB64);
-  if (expectedSig.length !== providedSig.length) return null;
-  let diff = 0;
-  for (let i = 0; i < expectedSig.length; i++) diff |= expectedSig[i] ^ providedSig[i];
-  if (diff !== 0) return null;
-  let payload;
-  try { payload = JSON.parse(bytesToUtf8(base64urlDecode(payloadB64))); }
-  catch { return null; }
-  if (!payload.exp || Date.now() / 1000 > payload.exp) return null;
-  return payload;
-}
-
-// ============================
-// 限流
-// ============================
-const rateLimitStore = new Map();
-function checkRateLimit(key, maxRequests, windowMs) {
-  const now = Date.now();
-  const entry = rateLimitStore.get(key);
-  if (!entry || now > entry.resetAt) {
-    const resetAt = now + windowMs;
-    rateLimitStore.set(key, { count: 1, resetAt });
-    return { allowed: true, remaining: maxRequests - 1, resetAt };
-  }
-  if (entry.count >= maxRequests) {
-    return { allowed: false, remaining: 0, resetAt: entry.resetAt };
-  }
-  entry.count += 1;
-  return { allowed: true, remaining: maxRequests - entry.count, resetAt: entry.resetAt };
-}
 
 // ============================
 // 鉴权：要求 Bearer Token + role=admin
@@ -173,6 +87,12 @@ Deno.serve(async (req) => {
     const id = parts[1];
     const subAction = parts[2];
 
+    // 公开接口(免鉴权)
+    if (section === 'public-settings' && req.method === 'GET') {
+      const supabase = createServiceClient();
+      return await handlePublicSettings(supabase);
+    }
+
     // 所有管理接口都需要 admin 鉴权
     const auth = await requireAdmin(req);
     if (auth.error) return auth.error;
@@ -225,6 +145,20 @@ Deno.serve(async (req) => {
       case 'settings':
         if (req.method === 'GET' && !id) return await handleListSettings(supabase);
         if (req.method === 'PUT' && id) return await handleUpdateSetting(supabase, ctx, req, id);
+        return createErrorResponse('未知接口', 404);
+
+      case 'storage':
+        if (req.method !== 'GET') return createErrorResponse('仅支持 GET', 405);
+        return await handleStorageStatus(supabase);
+
+      case 'collections':
+        if (req.method === 'GET' && !id) return await handleListCollections(supabase);
+        if (req.method === 'GET' && id && !subAction) return await handleGetCollection(supabase, id);
+        if (req.method === 'POST' && !id) return await handleCreateCollection(supabase, ctx, req);
+        if (req.method === 'PUT' && id && !subAction) return await handleUpdateCollection(supabase, ctx, req, id);
+        if (req.method === 'DELETE' && id && !subAction) return await handleDeleteCollection(supabase, ctx, id);
+        if (req.method === 'POST' && id && subAction === 'images') return await handleAddImagesToCollection(supabase, ctx, req, id);
+        if (req.method === 'DELETE' && id && subAction === 'images' && parts[3]) return await handleRemoveImageFromCollection(supabase, ctx, id, parts[3]);
         return createErrorResponse('未知接口', 404);
 
       default:
@@ -347,7 +281,7 @@ async function handleListUsers(supabase, url) {
     .replace(/_/g, '\\_');
 
   let q = supabase.from('users')
-    .select('id, username, display_name, avatar, role, is_active, created_at, last_login_at', { count: 'exact' })
+    .select('id, uid, username, display_name, avatar, role, is_active, created_at, last_login_at', { count: 'exact' })
     .order('created_at', { ascending: false });
   if (safeSearch) q = q.or(`username.ilike.%${safeSearch}%,display_name.ilike.%${safeSearch}%`);
   if (role)   q = q.eq('role', role);
@@ -369,7 +303,7 @@ async function handleListUsers(supabase, url) {
 async function handleGetUser(supabase, id) {
   const { data, error } = await supabase
     .from('users')
-    .select('id, username, display_name, avatar, role, is_active, created_at, last_login_at')
+    .select('id, uid, username, display_name, avatar, role, is_active, created_at, last_login_at')
     .eq('id', id).maybeSingle();
   if (error) return createErrorResponse('查询失败', 500);
   if (!data) return createErrorResponse('用户不存在', 404);
@@ -544,7 +478,7 @@ async function handleListImages(supabase) {
     // 新图(有 storage_path)用 Supabase 公开 URL
     // 老图(无 storage_path)继续用本地 images/<filename>
     src: img.storage_path
-      ? `${SUPABASE_URL}/storage/v1/object/public/${img.storage_bucket || 'gallery-images'}/${img.storage_path}`
+      ? `${Deno.env.get('SUPABASE_URL')}/storage/v1/object/public/${img.storage_bucket || 'gallery-images'}/${img.storage_path}`
       : 'images/' + img.filename,
   }));
 
@@ -903,6 +837,32 @@ const SETTING_KEY_ALLOWLIST = new Set([
   'allow_user_upload',
   'default_comment_status',
   'maintenance_mode',
+  // 上传全局配置
+  'upload_max_size_bytes',
+  'upload_allowed_formats',
+  'upload_compression_threshold_bytes',
+  'upload_daily_limit_user',
+  // 站点公告
+  'site_announcement_enabled',
+  'site_announcement_content',
+  // 存储容量监控
+  'storage_warning_threshold_percent',
+  'storage_max_capacity_bytes',
+  // 邮件通知配置
+  'email_notifications_enabled',
+  'email_provider',
+  'email_webhook_url',
+  'email_from',
+  'email_to_admin',
+  'notify_on_pending_comment',
+  'notify_on_abnormal_login',
+  // 首页 Hero 大图
+  'hero_enabled',
+  'hero_image_url',
+  'hero_title',
+  'hero_subtitle',
+  'hero_cta_text',
+  'hero_cta_link',
 ]);
 
 async function handleListSettings(supabase) {
@@ -918,6 +878,42 @@ async function handleListSettings(supabase) {
   return createCorsResponse({
     success: true,
     data: { settings: data || [] },
+  });
+}
+
+async function handlePublicSettings(supabase) {
+  // 仅返回对访客公开的安全配置
+  const publicKeys = [
+    'site_name',
+    'site_description',
+    'maintenance_mode',
+    'site_announcement_enabled',
+    'site_announcement_content',
+    // 首页 Hero 大图
+    'hero_enabled',
+    'hero_image_url',
+    'hero_title',
+    'hero_subtitle',
+    'hero_cta_text',
+    'hero_cta_link',
+  ];
+  const settings = await getSiteSettings(supabase, publicKeys);
+  return createCorsResponse({
+    success: true,
+    data: {
+      site_name: settings.site_name,
+      site_description: settings.site_description,
+      maintenance_mode: parseBool(settings.maintenance_mode),
+      site_announcement_enabled: parseBool(settings.site_announcement_enabled),
+      site_announcement_content: settings.site_announcement_content || '',
+      // 首页 Hero 大图
+      hero_enabled: parseBool(settings.hero_enabled),
+      hero_image_url: settings.hero_image_url || '',
+      hero_title: settings.hero_title || '',
+      hero_subtitle: settings.hero_subtitle || '',
+      hero_cta_text: settings.hero_cta_text || '',
+      hero_cta_link: settings.hero_cta_link || '',
+    },
   });
 }
 
@@ -944,4 +940,282 @@ async function handleUpdateSetting(supabase, ctx, req, key) {
     { old_exists: !!existing, value_preview: valueStr.slice(0, 100) });
 
   return createCorsResponse({ success: true, data: { key, value: valueStr } });
+}
+
+async function handleStorageStatus(supabase) {
+  // 统计数据库中所有图片的 size_bytes 总和(比 Storage API 更稳,不依赖 bucket 元数据)
+  const { data: agg } = await supabase
+    .from('gallery_images')
+    .select('size_bytes')
+    .not('size_bytes', 'is', null);
+  const usedBytes = (agg || []).reduce((s, r) => s + (Number(r.size_bytes) || 0), 0);
+  const imageCount = agg ? agg.length : 0;
+
+  // 读取管理员配置的容量上限与预警阈值
+  const settings = await getSiteSettings(supabase, [
+    'storage_warning_threshold_percent',
+    'storage_max_capacity_bytes',
+  ]);
+  const thresholdPercent = parseIntSafe(settings.storage_warning_threshold_percent, 80);
+  const maxCapacity = parseIntSafe(settings.storage_max_capacity_bytes, 0);
+
+  let usagePercent = 0;
+  let warning = false;
+  if (maxCapacity > 0) {
+    usagePercent = Math.round((usedBytes / maxCapacity) * 1000) / 10;
+    warning = usagePercent >= thresholdPercent;
+  }
+
+  return createCorsResponse({
+    success: true,
+    data: {
+      used_bytes: usedBytes,
+      used_human: formatBytes(usedBytes),
+      image_count: imageCount,
+      max_capacity_bytes: maxCapacity,
+      max_capacity_human: maxCapacity > 0 ? formatBytes(maxCapacity) : null,
+      usage_percent: usagePercent,
+      warning_threshold_percent: thresholdPercent,
+      warning,
+    },
+  });
+}
+
+function formatBytes(bytes) {
+  if (bytes === 0) return '0 B';
+  const k = 1024;
+  const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+}
+
+// ============================
+// 合集管理（后台）
+// ============================
+async function handleListCollections(supabase) {
+  const { data, error } = await supabase
+    .from('collections')
+    .select('id, name, description, cover_image_id, area, is_visible, sort_order, created_at, updated_at')
+    .order('sort_order', { ascending: true })
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    console.error('list collections error:', error);
+    return createErrorResponse('数据库查询失败', 500);
+  }
+
+  const enriched = await enrichCollections(supabase, data || []);
+  return createCorsResponse({ success: true, data: enriched });
+}
+
+async function handleGetCollection(supabase, id) {
+  const collectionId = parseInt(id, 10);
+  if (!collectionId) return createErrorResponse('无效合集 ID', 400);
+
+  const { data: collection, error: cErr } = await supabase
+    .from('collections')
+    .select('id, name, description, cover_image_id, area, is_visible, sort_order, created_at, updated_at')
+    .eq('id', collectionId)
+    .maybeSingle();
+
+  if (cErr || !collection) return createErrorResponse('合集不存在', 404);
+
+  const { data: images, error: iErr } = await supabase
+    .from('collection_images')
+    .select('image_id, sort_order, gallery_images(*)')
+    .eq('collection_id', collectionId)
+    .order('sort_order', { ascending: true })
+    .order('added_at', { ascending: true });
+
+  if (iErr) {
+    console.error('get collection images error:', iErr);
+    return createErrorResponse('查询合集图片失败', 500);
+  }
+
+  const baseUrl = Deno.env.get('SUPABASE_URL') || '';
+  const list = (images || [])
+    .filter((item) => item.gallery_images)
+    .map((item) => ({
+      ...item.gallery_images,
+      src: `${baseUrl}/storage/v1/object/public/${item.gallery_images.storage_bucket}/${item.gallery_images.storage_path}`,
+    }));
+
+  return createCorsResponse({
+    success: true,
+    data: {
+      ...collection,
+      image_count: list.length,
+      images: list,
+    },
+  });
+}
+
+async function handleCreateCollection(supabase, ctx, req) {
+  let body;
+  try { body = await req.json(); }
+  catch { return createErrorResponse('JSON 解析失败', 400); }
+
+  const name = (body.name || '').toString().trim();
+  if (!name) return createErrorResponse('合集名称不能为空', 400);
+
+  const area = (body.area || 'public').toString().trim().toLowerCase();
+  if (area !== 'public' && area !== 'paid') return createErrorResponse('area 参数错误', 400);
+
+  const { data, error } = await supabase.from('collections').insert({
+    name,
+    description: (body.description || '').toString().slice(0, 500) || null,
+    cover_image_id: body.cover_image_id ? parseInt(body.cover_image_id, 10) : null,
+    area,
+    is_visible: body.is_visible !== false,
+    sort_order: parseInt(body.sort_order, 10) || 99,
+    created_by: ctx.user.id,
+  }).select().single();
+
+  if (error) {
+    console.error('create collection error:', error);
+    return createErrorResponse('创建失败: ' + error.message, 500);
+  }
+
+  await logAudit(supabase, ctx, 'collections.create', 'collection', data.id, { name, area });
+  return createCorsResponse({ success: true, data });
+}
+
+async function handleUpdateCollection(supabase, ctx, req, id) {
+  const collectionId = parseInt(id, 10);
+  if (!collectionId) return createErrorResponse('无效合集 ID', 400);
+
+  let body;
+  try { body = await req.json(); }
+  catch { return createErrorResponse('JSON 解析失败', 400); }
+
+  const update: any = {};
+  if (body.name !== undefined) {
+    const name = body.name.toString().trim();
+    if (!name) return createErrorResponse('合集名称不能为空', 400);
+    update.name = name;
+  }
+  if (body.description !== undefined) update.description = body.description.toString().slice(0, 500) || null;
+  if (body.cover_image_id !== undefined) update.cover_image_id = body.cover_image_id ? parseInt(body.cover_image_id, 10) : null;
+  if (body.area !== undefined) {
+    const area = body.area.toString().trim().toLowerCase();
+    if (area !== 'public' && area !== 'paid') return createErrorResponse('area 参数错误', 400);
+    update.area = area;
+  }
+  if (body.is_visible !== undefined) update.is_visible = !!body.is_visible;
+  if (body.sort_order !== undefined) update.sort_order = parseInt(body.sort_order, 10) || 99;
+
+  if (Object.keys(update).length === 0) return createErrorResponse('没有要更新的字段', 400);
+
+  const { data, error } = await supabase
+    .from('collections')
+    .update(update)
+    .eq('id', collectionId)
+    .select()
+    .single();
+
+  if (error) {
+    console.error('update collection error:', error);
+    return createErrorResponse('更新失败: ' + error.message, 500);
+  }
+
+  await logAudit(supabase, ctx, 'collections.update', 'collection', collectionId, { fields: Object.keys(update) });
+  return createCorsResponse({ success: true, data });
+}
+
+async function handleDeleteCollection(supabase, ctx, id) {
+  const collectionId = parseInt(id, 10);
+  if (!collectionId) return createErrorResponse('无效合集 ID', 400);
+
+  const { data: target } = await supabase.from('collections').select('id, name').eq('id', collectionId).maybeSingle();
+  if (!target) return createErrorResponse('合集不存在', 404);
+
+  const { error } = await supabase.from('collections').delete().eq('id', collectionId);
+  if (error) {
+    console.error('delete collection error:', error);
+    return createErrorResponse('删除失败: ' + error.message, 500);
+  }
+
+  await logAudit(supabase, ctx, 'collections.delete', 'collection', collectionId, { name: target.name });
+  return createCorsResponse({ success: true });
+}
+
+async function handleAddImagesToCollection(supabase, ctx, req, id) {
+  const collectionId = parseInt(id, 10);
+  if (!collectionId) return createErrorResponse('无效合集 ID', 400);
+
+  let body;
+  try { body = await req.json(); }
+  catch { return createErrorResponse('JSON 解析失败', 400); }
+
+  const imageIds = Array.isArray(body.image_ids) ? body.image_ids.map((x) => parseInt(x, 10)).filter(Boolean) : [];
+  if (!imageIds.length) return createErrorResponse('缺少 image_ids', 400);
+
+  const { data: col } = await supabase.from('collections').select('id').eq('id', collectionId).maybeSingle();
+  if (!col) return createErrorResponse('合集不存在', 404);
+
+  const rows = imageIds.map((image_id, idx) => ({
+    collection_id: collectionId,
+    image_id,
+    sort_order: (body.sort_order_base || 0) + idx,
+  }));
+
+  const { error } = await supabase.from('collection_images').upsert(rows, { onConflict: 'collection_id,image_id' });
+  if (error) {
+    console.error('add images error:', error);
+    return createErrorResponse('添加图片失败: ' + error.message, 500);
+  }
+
+  await logAudit(supabase, ctx, 'collections.add_images', 'collection', collectionId, { count: imageIds.length });
+  return createCorsResponse({ success: true, added: imageIds.length });
+}
+
+async function handleRemoveImageFromCollection(supabase, ctx, id, imageId) {
+  const collectionId = parseInt(id, 10);
+  const imgId = parseInt(imageId, 10);
+  if (!collectionId || !imgId) return createErrorResponse('无效 ID', 400);
+
+  const { error } = await supabase
+    .from('collection_images')
+    .delete()
+    .eq('collection_id', collectionId)
+    .eq('image_id', imgId);
+
+  if (error) {
+    console.error('remove image error:', error);
+    return createErrorResponse('移除图片失败: ' + error.message, 500);
+  }
+
+  await logAudit(supabase, ctx, 'collections.remove_image', 'collection', collectionId, { image_id: imgId });
+  return createCorsResponse({ success: true });
+}
+
+async function enrichCollections(supabase, collections) {
+  const baseUrl = Deno.env.get('SUPABASE_URL') || '';
+  const ids = collections.map((c) => c.id);
+  const { data: counts } = await supabase
+    .from('collection_images')
+    .select('collection_id', { count: 'exact' })
+    .in('collection_id', ids);
+
+  const countMap = new Map();
+  (counts || []).forEach((r) => {
+    countMap.set(r.collection_id, (countMap.get(r.collection_id) || 0) + 1);
+  });
+
+  const coverIds = collections.map((c) => c.cover_image_id).filter(Boolean);
+  const { data: covers } = coverIds.length
+    ? await supabase.from('gallery_images').select('id, storage_path, storage_bucket').in('id', coverIds)
+    : { data: [] };
+  const coverMap = new Map((covers || []).map((r) => [r.id, r]));
+
+  return collections.map((c) => {
+    const cover = coverMap.get(c.cover_image_id);
+    return {
+      ...c,
+      image_count: countMap.get(c.id) || 0,
+      cover_src: cover
+        ? `${baseUrl}/storage/v1/object/public/${cover.storage_bucket}/${cover.storage_path}`
+        : null,
+    };
+  });
 }

@@ -552,6 +552,7 @@
       <div class="nav-item active" data-page="dashboard"><span class="icon">▦</span>仪表板</div>
       <div class="nav-item" data-page="users"><span class="icon">◉</span>用户管理</div>
       <div class="nav-item" data-page="images"><span class="icon">▣</span>图片管理</div>
+      <div class="nav-item" data-page="collections"><span class="icon">▪</span>合集管理</div>
       <div class="nav-item" data-page="paid-area"><span class="icon">★</span>付费区</div>
       <div class="nav-item" data-page="comments"><span class="icon">▤</span>评论管理</div>
       <div class="nav-item" data-page="audit"><span class="icon">▥</span>审计日志</div>
@@ -683,7 +684,25 @@ function toast(msg, type = 'success') {
   document.body.appendChild(t);
   setTimeout(() => t.remove(), 2500);
 }
-function confirmAction(message) { return confirm(message); }
+function confirmAction(message) {
+  return new Promise((resolve) => {
+    $('#modalContent').innerHTML = `
+      <div style="padding:18px 20px;border-bottom:1px solid var(--border);">
+        <h3 style="font-size:15px;">请确认</h3>
+      </div>
+      <div style="padding:18px 20px;">
+        <p style="line-height:1.6;white-space:pre-wrap;">${escapeHtml(message)}</p>
+        <div class="row" style="margin-top:18px;justify-content:flex-end;">
+          <button class="btn btn-secondary" id="confirmCancel">取消</button>
+          <button class="btn btn-danger" id="confirmOk" style="margin-left:10px;">确认</button>
+        </div>
+      </div>
+    `;
+    $('#modal').classList.remove('hidden');
+    $('#confirmCancel').onclick = () => { $('#modal').classList.add('hidden'); resolve(false); };
+    $('#confirmOk').onclick = () => { $('#modal').classList.add('hidden'); resolve(true); };
+  });
+}
 
 async function api(path, opts = {}) {
   const url = path.startsWith('http') ? path : ADMIN_API + path;
@@ -787,8 +806,8 @@ function showMainView(user) {
   loadPage('dashboard');
 }
 
-$('#logoutBtn').addEventListener('click', () => {
-  if (!confirmAction('确定要退出登录吗?')) return;
+$('#logoutBtn').addEventListener('click', async () => {
+  if (!(await confirmAction('确定要退出登录吗?'))) return;
   clearAuth();
   location.reload();
 });
@@ -813,6 +832,7 @@ async function loadPage(page) {
     if (page === 'dashboard') await renderDashboard(c);
     else if (page === 'users')     await renderUsers(c);
     else if (page === 'images')    await renderImages(c);
+    else if (page === 'collections') await renderCollections(c);
     else if (page === 'paid-area') await renderPaidArea(c);
     else if (page === 'comments')  await renderComments(c);
     else if (page === 'audit')     await renderAudit(c);
@@ -926,6 +946,191 @@ async function renderDashboard(c) {
 }
 
 // ============================
+// 合集管理
+// ============================
+async function renderCollections(c) {
+  c.innerHTML = `
+    <div class="page-header">
+      <div><div class="page-title">合集管理</div><div class="page-subtitle">创建/编辑图片合集，支持公开区与付费区</div></div>
+      <button class="btn" onclick="openCollectionDialog()">+ 新建合集</button>
+    </div>
+    <div id="collectionsBody"><span class="spinner"></span> 加载中…</div>
+  `;
+  await loadCollectionsList();
+}
+
+async function loadCollectionsList() {
+  const body = document.getElementById('collectionsBody');
+  if (!body) return;
+  try {
+    const { data } = await api('/collections');
+    const list = data || [];
+    if (!list.length) {
+      body.innerHTML = '<div class="empty-state">暂无合集，点击右上角创建</div>';
+      return;
+    }
+    body.innerHTML = `
+      <div class="table-wrap">
+        <table>
+          <thead><tr>
+            <th>ID</th><th>名称</th><th>分区</th><th>可见</th><th>图片数</th><th>排序</th><th>创建时间</th><th>操作</th>
+          </tr></thead>
+          <tbody>
+            ${list.map(col => `
+              <tr>
+                <td><code>${col.id}</code></td>
+                <td>${escapeHtml(col.name)}</td>
+                <td><span class="badge ${col.area === 'paid' ? 'badge-admin' : 'badge-user'}">${col.area === 'paid' ? '付费区' : '公开区'}</span></td>
+                <td><span class="badge ${col.is_visible ? 'badge-active' : 'badge-inactive'}">${col.is_visible ? '显示' : '隐藏'}</span></td>
+                <td>${col.image_count || 0}</td>
+                <td>${col.sort_order}</td>
+                <td>${new Date(col.created_at).toLocaleString()}</td>
+                <td>
+                  <button class="btn btn-sm" onclick="openCollectionDialog(${col.id})">编辑</button>
+                  <button class="btn btn-sm btn-secondary" onclick="openCollectionImagesDialog(${col.id}, '${col.area}')">管理图片</button>
+                  <button class="btn btn-sm btn-danger" onclick="deleteCollection(${col.id})">删除</button>
+                </td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </div>
+    `;
+  } catch (err) {
+    body.innerHTML = '<div class="alert alert-error">加载失败: ' + escapeHtml(err.message) + '</div>';
+  }
+}
+
+window.openCollectionDialog = async (id) => {
+  const isEdit = !!id;
+  let col = { name: '', description: '', area: 'public', is_visible: true, sort_order: 99, cover_image_id: '' };
+  if (isEdit) {
+    const { data } = await api(`/collections/${id}`);
+    col = data || col;
+  }
+  $('#modalContent').innerHTML = `
+    <div style="padding:18px 20px;border-bottom:1px solid var(--border);">
+      <h3 style="font-size:15px;">${isEdit ? '编辑合集' : '新建合集'}</h3>
+    </div>
+    <form id="collectionForm" style="padding:18px 20px;">
+      <div class="form-group"><label>名称 *</label><input type="text" id="colName" value="${escapeHtml(col.name)}" required maxlength="128"></div>
+      <div class="form-group"><label>描述</label><textarea id="colDesc" rows="2" maxlength="500">${escapeHtml(col.description || '')}</textarea></div>
+      <div class="form-group"><label>分区</label>
+        <select id="colArea"><option value="public" ${col.area === 'public' ? 'selected' : ''}>公开区</option><option value="paid" ${col.area === 'paid' ? 'selected' : ''}>付费区</option></select>
+      </div>
+      <div class="form-group"><label>封面图片 ID</label><input type="number" id="colCover" value="${col.cover_image_id || ''}" placeholder="可选，填写 gallery_images.id"></div>
+      <div class="form-group"><label>排序</label><input type="number" id="colSort" value="${col.sort_order}" min="0" max="999"></div>
+      <div class="form-group"><label><input type="checkbox" id="colVisible" ${col.is_visible ? 'checked' : ''}> 显示</label></div>
+      <div class="row" style="justify-content:flex-end;margin-top:18px;">
+        <button type="button" class="btn btn-secondary" onclick="closeModal()">取消</button>
+        <button type="submit" class="btn">${isEdit ? '保存' : '创建'}</button>
+      </div>
+    </form>
+  `;
+  $('#modal').classList.remove('hidden');
+
+  $('#collectionForm').onsubmit = async (e) => {
+    e.preventDefault();
+    const payload = {
+      name: $('#colName').value.trim(),
+      description: $('#colDesc').value.trim(),
+      area: $('#colArea').value,
+      cover_image_id: $('#colCover').value ? parseInt($('#colCover').value, 10) : null,
+      sort_order: parseInt($('#colSort').value, 10) || 99,
+      is_visible: $('#colVisible').checked,
+    };
+    try {
+      if (isEdit) await api(`/collections/${id}`, { method: 'PUT', body: JSON.stringify(payload) });
+      else await api('/collections', { method: 'POST', body: JSON.stringify(payload) });
+      toast(isEdit ? '保存成功' : '创建成功', 'success');
+      closeModal();
+      loadCollectionsList();
+    } catch (err) {
+      toast(err.message, 'error');
+    }
+  };
+};
+
+window.deleteCollection = async (id) => {
+  if (!(await confirmAction(`确定删除合集 ${id}？合集中的图片关联会被清除，但图片本身不会删除。`))) return;
+  try {
+    await api(`/collections/${id}`, { method: 'DELETE' });
+    toast('删除成功', 'success');
+    loadCollectionsList();
+  } catch (err) {
+    toast(err.message, 'error');
+  }
+};
+
+window.openCollectionImagesDialog = async (id, area) => {
+  $('#modalContent').innerHTML = `
+    <div style="padding:18px 20px;border-bottom:1px solid var(--border);">
+      <h3 style="font-size:15px;">管理合集图片</h3>
+    </div>
+    <div style="padding:18px 20px;max-height:70vh;overflow-y:auto;">
+      <div class="form-group">
+        <label>添加图片 ID（多个用逗号分隔）</label>
+        <input type="text" id="colAddImageIds" placeholder="例如: 101,102,103">
+      </div>
+      <div class="row" style="justify-content:flex-end;margin-bottom:14px;">
+        <button type="button" class="btn" onclick="addImagesToCollection(${id})">添加</button>
+      </div>
+      <div id="colImagesList"><span class="spinner"></span> 加载中…</div>
+    </div>
+  `;
+  $('#modal').classList.remove('hidden');
+  await loadCollectionImagesList(id, area);
+};
+
+async function loadCollectionImagesList(id, area) {
+  const el = document.getElementById('colImagesList');
+  if (!el) return;
+  try {
+    const { data } = await api(`/collections/${id}`);
+    const images = (data && data.images) || [];
+    if (!images.length) { el.innerHTML = '<div class="empty-state">合集中暂无图片</div>'; return; }
+    el.innerHTML = `
+      <div class="image-grid">
+        ${images.map(img => `
+          <div class="image-card">
+            <div class="thumb" style="background-image:url('${img.src}')"></div>
+            <div class="info"><div class="name">${escapeHtml(img.title || img.filename || '')}</div><div class="meta">ID: ${img.id}</div></div>
+            <div class="actions"><button class="btn btn-sm btn-danger" onclick="removeImageFromCollection(${id}, ${img.id})">移除</button></div>
+          </div>
+        `).join('')}
+      </div>
+    `;
+  } catch (err) {
+    el.innerHTML = '<div class="alert alert-error">加载失败: ' + escapeHtml(err.message) + '</div>';
+  }
+}
+
+window.addImagesToCollection = async (id) => {
+  const raw = document.getElementById('colAddImageIds').value;
+  const ids = raw.split(/[,，\s]+/).map(s => parseInt(s.trim(), 10)).filter(Boolean);
+  if (!ids.length) return toast('请输入图片 ID', 'warning');
+  try {
+    await api(`/collections/${id}/images`, { method: 'POST', body: JSON.stringify({ image_ids: ids }) });
+    toast(`已添加 ${ids.length} 张图片`, 'success');
+    document.getElementById('colAddImageIds').value = '';
+    await loadCollectionImagesList(id);
+  } catch (err) {
+    toast(err.message, 'error');
+  }
+};
+
+window.removeImageFromCollection = async (collectionId, imageId) => {
+  if (!(await confirmAction('确定从合集中移除这张图片？'))) return;
+  try {
+    await api(`/collections/${collectionId}/images/${imageId}`, { method: 'DELETE' });
+    toast('移除成功', 'success');
+    await loadCollectionImagesList(collectionId);
+  } catch (err) {
+    toast(err.message, 'error');
+  }
+};
+
+// ============================
 // 付费区管理
 // ============================
 async function renderPaidArea(c) {
@@ -1018,7 +1223,7 @@ async function renderPaidArea(c) {
       return;
     }
     const score = evaluatePasswordStrength(p1);
-    if (score.level === 'weak' && !confirmAction('密码强度较弱，确定要使用吗？')) return;
+    if (score.level === 'weak' && !(await confirmAction('密码强度较弱，确定要使用吗？'))) return;
     const btn = $('#pwdChangeBtn');
     btn.disabled = true; btn.textContent = '更新中…';
     try {
@@ -1121,13 +1326,14 @@ function renderUserTable({ users, total, page, pageSize }) {
     <table>
       <thead><tr>
         <th class="check-col"><input type="checkbox" class="all-check" id="userCheckAll" ${allSelected ? 'checked' : ''}></th>
-        <th>ID</th><th>用户</th><th>角色</th><th>状态</th>
+        <th>ID</th><th>UID</th><th>用户</th><th>角色</th><th>状态</th>
         <th>注册时间</th><th>最后登录</th><th>操作</th>
       </tr></thead>
       <tbody>${users.map(u => `
         <tr class="${selected.has(u.id) ? 'row-selected' : ''}">
           <td class="check-col"><input type="checkbox" class="row-check" data-id="${u.id}" ${selected.has(u.id) ? 'checked' : ''}></td>
           <td><code>${u.id}</code></td>
+          <td><code>${u.uid != null ? u.uid : '-'}</code></td>
           <td>
             <div class="row">
               <span class="avatar">${escapeHtml((u.display_name || u.username).charAt(0).toUpperCase())}</span>
@@ -1186,7 +1392,7 @@ const AdminActions = {};
 
 // 用户管理
 AdminActions.toggleUserStatus = async (id, newStatus) => {
-  if (!confirmAction(newStatus ? '确定要启用该用户?' : '确定要禁用该用户?')) return;
+  if (!(await confirmAction(newStatus ? '确定要启用该用户?' : '确定要禁用该用户?'))) return;
   try {
     await api(`/users/${id}/status`, { method: 'PUT', body: JSON.stringify({ is_active: newStatus }) });
     toast('已' + (newStatus ? '启用' : '禁用'));
@@ -1195,7 +1401,7 @@ AdminActions.toggleUserStatus = async (id, newStatus) => {
 };
 
 AdminActions.toggleUserRole = async (id, newRole) => {
-  if (!confirmAction(`确定要${newRole === 'admin' ? '提升为管理员' : '降级为普通用户'}?`)) return;
+  if (!(await confirmAction(`确定要${newRole === 'admin' ? '提升为管理员' : '降级为普通用户'}?`))) return;
   try {
     await api(`/users/${id}/role`, { method: 'PUT', body: JSON.stringify({ role: newRole }) });
     toast('已' + (newRole === 'admin' ? '升级' : '降级'));
@@ -1204,7 +1410,7 @@ AdminActions.toggleUserRole = async (id, newRole) => {
 };
 
 AdminActions.deleteUser = async (id, username) => {
-  if (!confirmAction(`确定要删除用户「${username}」? 该操作不可恢复!`)) return;
+  if (!(await confirmAction(`确定要删除用户「${username}」? 该操作不可恢复!`))) return;
   try {
     await api(`/users/${id}`, { method: 'DELETE' });
     toast('用户已删除');
@@ -1321,7 +1527,7 @@ AdminActions.approveImage = async (id) => {
   } catch (err) { toast(err.message, 'error'); }
 };
 AdminActions.toggleImageArea = async (id, newArea) => {
-  if (!confirmAction(`确定要将该图片移动到「${newArea === 'paid' ? '付费区' : '公开区'}」?`)) return;
+  if (!(await confirmAction(`确定要将该图片移动到「${newArea === 'paid' ? '付费区' : '公开区'}」?`))) return;
   try {
     await api(`/images/${id}/meta`, { method: 'PUT', body: JSON.stringify({ area: newArea }) });
     toast('已移动到' + (newArea === 'paid' ? '付费区' : '公开区'));
@@ -1330,7 +1536,7 @@ AdminActions.toggleImageArea = async (id, newArea) => {
 };
 // 删除单张图片(同时删 storage 文件)
 AdminActions.deleteImage = async (id, filename) => {
-  if (!confirmAction(`确定要永久删除图片 "${filename || id}" 吗?\n此操作会同时删除 storage 文件、点赞、浏览、评论,不可恢复!`)) return;
+  if (!(await confirmAction(`确定要永久删除图片 "${filename || id}" 吗?\n此操作会同时删除 storage 文件、点赞、浏览、评论,不可恢复!`))) return;
   try {
     await api(`/images/${id}`, { method: 'DELETE' });
     toast('图片已删除');
@@ -1426,17 +1632,17 @@ window.editImageMeta = AdminActions.editImageMeta;
 window.openUploadDialog = () => {
   $('#modalContent').innerHTML = `
     <div style="padding:18px 20px;border-bottom:1px solid var(--border);">
-      <h3 style="font-size:15px;">上传图片</h3>
+      <h3 style="font-size:15px;">批量上传图片</h3>
     </div>
     <form id="uploadForm" style="padding:18px 20px;">
       <div class="form-group">
         <label>选择文件 *</label>
-        <input type="file" name="file" id="uploadFile" accept="image/*" required style="padding:9px;background:var(--bg-3);border:1px solid var(--border);border-radius:6px;width:100%;color:var(--text);">
-        <div class="text-muted" style="font-size:11px;margin-top:4px;">上传后会自动压缩为 WebP (长边 ≤ 1280px,质量 82)</div>
+        <input type="file" name="file" id="uploadFile" accept="image/*" multiple required style="padding:9px;background:var(--bg-3);border:1px solid var(--border);border-radius:6px;width:100%;color:var(--text);">
+        <div class="text-muted" style="font-size:11px;margin-top:4px;">支持 jpg/png/webp，单图 ≤ 10MB，可一次选择多张</div>
       </div>
       <div class="form-group">
-        <label>标题</label>
-        <input type="text" name="title" id="uploadTitle" maxlength="128" placeholder="留空则用文件名">
+        <label>标题前缀</label>
+        <input type="text" name="title" id="uploadTitle" maxlength="128" placeholder="留空则用文件名，批量时会自动加序号">
       </div>
       <div class="form-group">
         <label>分类</label>
@@ -1465,91 +1671,127 @@ window.openUploadDialog = () => {
           <input type="checkbox" name="is_visible" id="uploadIsVisible" checked> 立即可见
         </label>
       </div>
+      <div id="uploadFileList" style="display:none;flex-direction:column;gap:8px;max-height:180px;overflow-y:auto;margin-top:10px;"></div>
       <div id="uploadProgress" style="display:none;margin-top:14px;">
-        <div class="text-muted" style="font-size:12px;margin-bottom:6px;" id="uploadStatus">上传中…</div>
+        <div class="text-muted" style="font-size:12px;margin-bottom:6px;" id="uploadStatus">准备上传…</div>
         <div style="height:6px;background:var(--bg-3);border-radius:3px;overflow:hidden;">
           <div id="uploadBar" style="height:100%;background:var(--accent);width:0%;transition:width 0.2s;"></div>
         </div>
       </div>
       <div class="row" style="margin-top:18px;justify-content:flex-end;">
         <button type="button" class="btn btn-secondary" onclick="closeModal()">取消</button>
-        <button type="submit" class="btn" id="uploadSubmitBtn">上传</button>
+        <button type="submit" class="btn" id="uploadSubmitBtn">开始上传</button>
       </div>
     </form>
   `;
   $('#modal').classList.remove('hidden');
 
-  // 选中文件后,自动用文件名填标题
+  const fileListEl = $('#uploadFileList');
+
+  function renderFileList(files) {
+    if (!files || files.length === 0) { fileListEl.style.display = 'none'; fileListEl.innerHTML = ''; return; }
+    fileListEl.style.display = 'flex';
+    fileListEl.innerHTML = Array.from(files).map((f, i) => `
+      <div data-idx="${i}" style="display:flex;align-items:center;gap:10px;padding:8px 10px;background:var(--bg-3);border:1px solid var(--border);border-radius:6px;font-size:12px;">
+        <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${f.name}</span>
+        <span style="color:var(--text-3);white-space:nowrap;">${(f.size / 1024 / 1024).toFixed(2)} MB</span>
+        <span class="file-status" style="white-space:nowrap;color:var(--text-2);">等待中</span>
+      </div>
+    `).join('');
+  }
+
+  function setFileStatus(idx, text, color) {
+    const row = fileListEl.querySelector(`div[data-idx="${idx}"] .file-status`);
+    if (row) { row.textContent = text; row.style.color = color || 'var(--text-2)'; }
+  }
+
   $('#uploadFile').onchange = (e) => {
-    const f = e.target.files[0];
-    if (!f) return;
-    const titleInput = $('#uploadTitle');
-    if (!titleInput.value) {
-      titleInput.value = f.name.replace(/\.[^.]+$/, '');
-    }
+    renderFileList(e.target.files);
   };
 
   $('#uploadForm').onsubmit = async (e) => {
     e.preventDefault();
-    const f = $('#uploadFile').files[0];
-    if (!f) return toast('请选择文件', 'error');
-    if (f.size > 10 * 1024 * 1024) return toast('文件超过 10MB', 'error');
+    const files = Array.from($('#uploadFile').files || []);
+    if (!files.length) return toast('请选择文件', 'error');
+    for (const f of files) {
+      if (f.size > 10 * 1024 * 1024) return toast(`${f.name} 超过 10MB`, 'error');
+    }
 
-    const fd = new FormData();
-    fd.append('file', f);
-    fd.append('title', $('#uploadTitle').value.trim());
-    fd.append('category', $('#uploadCategory').value.trim() || 'portrait');
-    fd.append('sort_order', $('#uploadSort').value || '99');
-    fd.append('description', $('#uploadDesc').value || '');
-    fd.append('area', $('#uploadArea').value || 'public');
-    fd.append('is_new', $('#uploadIsNew').checked ? 'true' : 'false');
-    fd.append('is_visible', $('#uploadIsVisible').checked ? 'true' : 'false');
+    const baseTitle = $('#uploadTitle').value.trim();
+    const category = $('#uploadCategory').value.trim() || 'portrait';
+    const sortOrder = $('#uploadSort').value || '99';
+    const description = $('#uploadDesc').value || '';
+    const area = $('#uploadArea').value || 'public';
+    const isNew = $('#uploadIsNew').checked ? 'true' : 'false';
+    const isVisible = $('#uploadIsVisible').checked ? 'true' : 'false';
 
     const submitBtn = $('#uploadSubmitBtn');
     submitBtn.disabled = true;
     submitBtn.textContent = '上传中…';
     $('#uploadProgress').style.display = 'block';
 
-    // 用 XHR 才能监听 progress,fetch 没法
-    const xhr = new XMLHttpRequest();
-    xhr.open('POST', UPLOAD_API);
-    xhr.setRequestHeader('apikey', ANON_KEY);
-    xhr.setRequestHeader('Authorization', 'Bearer ' + State.token);
-    xhr.upload.onprogress = (e) => {
-      if (e.lengthComputable) {
-        const pct = Math.round((e.loaded / e.total) * 100);
-        $('#uploadBar').style.width = pct + '%';
-        $('#uploadStatus').textContent = `上传中… ${pct}%`;
+    let completed = 0;
+    let failed = 0;
+
+    for (let i = 0; i < files.length; i++) {
+      const f = files[i];
+      const title = baseTitle ? `${baseTitle} ${i + 1}` : f.name.replace(/\.[^.]+$/, '');
+      const fd = new FormData();
+      fd.append('file', f);
+      fd.append('title', title);
+      fd.append('category', category);
+      fd.append('sort_order', sortOrder);
+      fd.append('description', description);
+      fd.append('area', area);
+      fd.append('is_new', isNew);
+      fd.append('is_visible', isVisible);
+
+      setFileStatus(i, '上传中…', 'var(--accent)');
+      try {
+        await new Promise((resolve, reject) => {
+          const xhr = new XMLHttpRequest();
+          xhr.open('POST', UPLOAD_API);
+          xhr.setRequestHeader('apikey', ANON_KEY);
+          xhr.setRequestHeader('Authorization', 'Bearer ' + State.token);
+          xhr.upload.onprogress = (ev) => {
+            if (ev.lengthComputable) {
+              const filePct = ev.loaded / ev.total;
+              const overall = ((i + filePct) / files.length) * 100;
+              $('#uploadBar').style.width = overall + '%';
+            }
+          };
+          xhr.onload = () => {
+            let res;
+            try { res = JSON.parse(xhr.responseText); }
+            catch { res = { error: xhr.responseText || ('HTTP ' + xhr.status) }; }
+            if (xhr.status >= 200 && xhr.status < 300 && res.success) resolve(res.data);
+            else reject(new Error(res.error || ('HTTP ' + xhr.status)));
+          };
+          xhr.onerror = () => reject(new Error('网络错误'));
+          xhr.send(fd);
+        });
+        completed++;
+        setFileStatus(i, '完成', 'var(--success)');
+      } catch (err) {
+        failed++;
+        setFileStatus(i, '失败: ' + err.message, 'var(--danger)');
+        console.error('upload-image error:', f.name, err);
       }
-    };
-    xhr.onload = () => {
-      submitBtn.disabled = false;
-      submitBtn.textContent = '上传';
-      let res;
-      try { res = JSON.parse(xhr.responseText); }
-      catch { res = { error: xhr.responseText || ('HTTP ' + xhr.status) }; }
-      if (xhr.status >= 200 && xhr.status < 300 && res.success) {
-        toast(`上传成功!${res.data.width}×${res.data.height} · ${(res.data.size_bytes/1024).toFixed(1)}KB`);
+    }
+
+    $('#uploadBar').style.width = '100%';
+    $('#uploadStatus').textContent = `上传结束：成功 ${completed} 张，失败 ${failed} 张`;
+    $('#uploadBar').style.background = failed ? 'var(--danger)' : 'var(--accent)';
+    submitBtn.disabled = false;
+    submitBtn.textContent = '开始上传';
+    toast(`上传完成：成功 ${completed} 张${failed ? '，失败 ' + failed + ' 张' : ''}`, failed ? 'warning' : 'success');
+
+    if (completed > 0) {
+      setTimeout(() => {
         closeModal();
         loadPage('images');
-      } else {
-        toast(res.error || ('HTTP ' + xhr.status), 'error');
-        $('#uploadStatus').textContent = '失败: ' + (res.error || '');
-        $('#uploadBar').style.background = 'var(--danger)';
-      }
-    };
-    xhr.onerror = (e) => {
-      submitBtn.disabled = false;
-      submitBtn.textContent = '上传';
-      const hint = location.protocol === 'file:'
-        ? '提示:file:// 协议下浏览器禁止跨源请求,请用 http://localhost 打开 admin.html'
-        : '请检查网络或 Supabase 配置';
-      toast(`网络错误 · ${hint}`, 'error');
-      $('#uploadStatus').textContent = '网络错误 · ' + hint;
-      $('#uploadBar').style.background = 'var(--danger)';
-      console.error('upload-image xhr error:', e);
-    };
-    xhr.send(fd);
+      }, 1000);
+    }
   };
 };
 
@@ -1661,7 +1903,7 @@ function renderCommentTable({ comments, total, page, pageSize }) {
 }
 
 window.deleteComment = async (id) => {
-  if (!confirmAction('确定要删除该评论?')) return;
+  if (!(await confirmAction('确定要删除该评论?'))) return;
   try {
     await api(`/comments/${id}`, { method: 'DELETE' });
     toast('评论已删除');
@@ -1671,7 +1913,7 @@ window.deleteComment = async (id) => {
 
 window.updateCommentStatus = async (id, status) => {
   const labels = { approved: '通过', rejected: '拒绝', pending: '待审' };
-  if (!confirmAction(`确定要${labels[status]}该评论?`)) return;
+  if (!(await confirmAction(`确定要${labels[status]}该评论?`))) return;
   try {
     await api(`/comments/${id}/status`, { method: 'PUT', body: JSON.stringify({ status }) });
     toast('评论已' + labels[status]);
@@ -1751,12 +1993,12 @@ window.batchUsers = async (action) => {
     const sel = document.getElementById('batchUserRoleSel');
     const role = sel ? sel.value : '';
     if (!role) return toast('请选择目标角色', 'error');
-    if (!confirmAction(`确定要将 ${ids.length} 个用户批量改为「${role === 'admin' ? '管理员' : '普通用户'}」?`)) return;
+    if (!(await confirmAction(`确定要将 ${ids.length} 个用户批量改为「${role === 'admin' ? '管理员' : '普通用户'}」?`))) return;
     return await runBatch('users', { action: 'set_role_' + role });
   }
   const text = { enable: '启用', disable: '禁用', delete: '删除' }[action];
-  if (action === 'delete' && !confirmAction(`确定要批量${text} ${ids.length} 个用户? 该操作不可恢复!`)) return;
-  if (action !== 'delete' && !confirmAction(`确定要批量${text} ${ids.length} 个用户?`)) return;
+  if (action === 'delete' && !(await confirmAction(`确定要批量${text} ${ids.length} 个用户? 该操作不可恢复!`))) return;
+  if (action !== 'delete' && !(await confirmAction(`确定要批量${text} ${ids.length} 个用户?`))) return;
   return await runBatch('users', { action });
 };
 
@@ -1767,11 +2009,11 @@ window.batchImages = async (action) => {
   // approve 映射到后端 show 动作 (通过审核 = 设为可见)
   const text = { show: '显示', hide: '隐藏', set_new: '标为新作品', unset_new: '取消新作品', approve: '通过审核', set_paid: '移动到付费区', set_public: '移动到公开区', delete: '删除' }[action];
   const backendAction = action === 'approve' ? 'show' : action;
-  if (!confirmAction(`确定要批量${text} ${ids.length} 张图片?`)) return;
+  if (!(await confirmAction(`确定要批量${text} ${ids.length} 张图片?`))) return;
 
   // 删除走单条循环(后端没有 batch delete 接口,简单可靠)
   if (action === 'delete') {
-    if (!confirmAction(`再次确认: ${ids.length} 张图片将被永久删除,不可恢复!`)) return;
+    if (!(await confirmAction(`再次确认: ${ids.length} 张图片将被永久删除,不可恢复!`))) return;
     let ok = 0, fail = 0;
     for (const id of ids) {
       try {
@@ -1792,8 +2034,8 @@ window.batchComments = async (action) => {
   const ids = Array.from(getSelection());
   if (!ids.length) return toast('请先勾选评论', 'error');
   const text = { delete: '删除', approve: '通过', reject: '拒绝' }[action];
-  if (action === 'delete' && !confirmAction(`确定要批量${text} ${ids.length} 条评论? 该操作不可恢复!`)) return;
-  if (action !== 'delete' && !confirmAction(`确定要批量${text} ${ids.length} 条评论?`)) return;
+  if (action === 'delete' && !(await confirmAction(`确定要批量${text} ${ids.length} 条评论? 该操作不可恢复!`))) return;
+  if (action !== 'delete' && !(await confirmAction(`确定要批量${text} ${ids.length} 条评论?`))) return;
   return await runBatch('comments', { action });
 };
 
@@ -1906,13 +2148,84 @@ function renderPagination(total, page, pageSize, onPageClick) {
 // ============================
 // 站点设置
 // ============================
+const SETTING_SECTIONS = [
+  {
+    id: 'basic',
+    title: '基本配置',
+    keys: ['site_name', 'site_description', 'allow_user_upload', 'default_comment_status', 'maintenance_mode'],
+  },
+  {
+    id: 'upload',
+    title: '上传全局配置',
+    keys: ['upload_max_size_bytes', 'upload_allowed_formats', 'upload_compression_threshold_bytes', 'upload_daily_limit_user'],
+  },
+  {
+    id: 'announcement',
+    title: '站点公告',
+    keys: ['site_announcement_enabled', 'site_announcement_content'],
+  },
+  {
+    id: 'hero',
+    title: '首页 Hero 大图',
+    keys: ['hero_enabled', 'hero_image_url', 'hero_title', 'hero_subtitle', 'hero_cta_text', 'hero_cta_link'],
+  },
+  {
+    id: 'storage',
+    title: '存储容量监控',
+    keys: ['storage_warning_threshold_percent', 'storage_max_capacity_bytes'],
+  },
+  {
+    id: 'email',
+    title: '邮件通知配置',
+    keys: ['email_notifications_enabled', 'email_provider', 'email_webhook_url', 'email_from', 'email_to_admin', 'notify_on_pending_comment', 'notify_on_abnormal_login'],
+  },
+];
+
 const SETTING_LABELS = {
   site_name: { label: '站点名称', placeholder: 'shungxin-gallery', type: 'text' },
   site_description: { label: '站点描述', placeholder: '一句话描述站点', type: 'text' },
   allow_user_upload: { label: '允许用户上传', placeholder: 'true / false', type: 'select', options: [['true', '是'], ['false', '否']] },
   default_comment_status: { label: '默认评论状态', placeholder: 'approved / pending', type: 'select', options: [['approved', '已通过'], ['pending', '待审核']] },
   maintenance_mode: { label: '维护模式', placeholder: 'true / false', type: 'select', options: [['true', '开启'], ['false', '关闭']] },
+  // 上传
+  upload_max_size_bytes: { label: '单图最大尺寸(字节)', placeholder: '10485760', type: 'number' },
+  upload_allowed_formats: { label: '允许格式', placeholder: 'jpg,png,webp,gif,heic,avif', type: 'text' },
+  upload_compression_threshold_bytes: { label: '压缩阈值(字节)', placeholder: '1048576', type: 'number' },
+  upload_daily_limit_user: { label: '普通用户每日上传上限', placeholder: '5', type: 'number' },
+  // 公告
+  site_announcement_enabled: { label: '启用公告', type: 'select', options: [['true', '显示'], ['false', '隐藏']] },
+  site_announcement_content: { label: '公告内容(支持 HTML)', placeholder: '请输入首页顶部公告内容', type: 'textarea' },
+  // 首页 Hero 大图
+  hero_enabled: { label: '启用首页大图', type: 'select', options: [['true', '显示'], ['false', '隐藏']] },
+  hero_image_url: { label: '背景图片 URL', placeholder: 'https://example.com/hero.jpg 或 /assets/images/hero.jpg', type: 'text' },
+  hero_title: { label: '主标题', placeholder: '留空则使用站点名称', type: 'text' },
+  hero_subtitle: { label: '副标题', placeholder: '留空则使用站点描述', type: 'text' },
+  hero_cta_text: { label: '按钮文字', placeholder: '进入画廊', type: 'text' },
+  hero_cta_link: { label: '按钮链接', placeholder: '#gallery 或 https://...', type: 'text' },
+  // 存储
+  storage_warning_threshold_percent: { label: '容量预警阈值(%)', placeholder: '80', type: 'number' },
+  storage_max_capacity_bytes: { label: '容量上限(字节,0=不限制)', placeholder: '10737418240', type: 'number' },
+  // 邮件
+  email_notifications_enabled: { label: '启用邮件通知', type: 'select', options: [['true', '开启'], ['false', '关闭']] },
+  email_provider: { label: '邮件服务商', type: 'select', options: [['webhook', 'Webhook'], ['resend', 'Resend']] },
+  email_webhook_url: { label: '邮件 Webhook URL', placeholder: 'https://your-service.com/send-email', type: 'text' },
+  email_from: { label: '发件人地址', placeholder: 'noreply@example.com', type: 'text' },
+  email_to_admin: { label: '管理员收件地址', placeholder: 'admin@example.com', type: 'text' },
+  notify_on_pending_comment: { label: '评论待审时通知', type: 'select', options: [['true', '通知'], ['false', '不通知']] },
+  notify_on_abnormal_login: { label: '异常登录时通知', type: 'select', options: [['true', '通知'], ['false', '不通知']] },
 };
+
+function renderSettingInput(key, current, meta) {
+  if (meta.type === 'select') {
+    return `<select id="setting-${key}" style="width:100%;padding:9px 12px;background:var(--bg-3);border:1px solid var(--border);border-radius:6px;color:var(--text);">
+      ${meta.options.map(([v, t]) => `<option value="${v}" ${String(current) === v ? 'selected' : ''}>${t}</option>`).join('')}
+    </select>`;
+  }
+  if (meta.type === 'textarea') {
+    return `<textarea id="setting-${key}" rows="4" placeholder="${escapeHtml(meta.placeholder || '')}" style="width:100%;padding:9px 12px;background:var(--bg-3);border:1px solid var(--border);border-radius:6px;color:var(--text);resize:vertical;">${escapeHtml(current)}</textarea>`;
+  }
+  return `<input type="${meta.type === 'number' ? 'number' : 'text'}" id="setting-${key}" value="${escapeHtml(current)}" placeholder="${escapeHtml(meta.placeholder || '')}" style="width:100%;padding:9px 12px;background:var(--bg-3);border:1px solid var(--border);border-radius:6px;color:var(--text);">`;
+}
 
 async function renderSettings(c) {
   c.innerHTML = `
@@ -1921,39 +2234,55 @@ async function renderSettings(c) {
     </div>
     <div id="settingsBody" class="loading"><span class="spinner"></span> 加载中…</div>
   `;
-  const { data } = await api('/settings');
+  const [{ data }, storageRes] = await Promise.all([
+    api('/settings'),
+    api('/storage').catch(() => ({ data: null })),
+  ]);
   const map = {};
   (data.settings || []).forEach(s => { map[s.key] = s.value; });
   const body = $('#settingsBody');
 
-  const rows = Object.entries(SETTING_LABELS).map(([key, meta]) => {
-    const current = map[key] || '';
-    let input = '';
-    if (meta.type === 'select') {
-      input = `<select id="setting-${key}" style="width:100%;padding:9px 12px;background:var(--bg-3);border:1px solid var(--border);border-radius:6px;color:var(--text);">
-        ${meta.options.map(([v, t]) => `<option value="${v}" ${current === v ? 'selected' : ''}>${t}</option>`).join('')}
-      </select>`;
-    } else {
-      input = `<input type="text" id="setting-${key}" value="${escapeHtml(current)}" placeholder="${escapeHtml(meta.placeholder)}" style="width:100%;padding:9px 12px;background:var(--bg-3);border:1px solid var(--border);border-radius:6px;color:var(--text);">`;
+  const cards = SETTING_SECTIONS.map(sec => {
+    if (sec.id === 'storage') {
+      const s = storageRes && storageRes.data ? storageRes.data : {};
+      return `
+        <div class="trend-card">
+          <h3>${escapeHtml(sec.title)}</h3>
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:14px;margin-bottom:16px;">
+            <div class="stat-card ${s.warning ? 'red' : 'blue'}" style="padding:14px;">
+              <div class="label">已用空间</div>
+              <div class="value" style="font-size:22px;">${escapeHtml(s.used_human || '-')}</div>
+              <div class="delta">${s.image_count || 0} 张图片</div>
+            </div>
+            <div class="stat-card" style="padding:14px;">
+              <div class="label">容量上限</div>
+              <div class="value" style="font-size:22px;">${escapeHtml(s.max_capacity_human || '未设置')}</div>
+              <div class="delta">阈值 ${s.warning_threshold_percent || 80}%</div>
+            </div>
+            <div class="stat-card ${s.warning ? 'red' : 'green'}" style="padding:14px;">
+              <div class="label">使用率</div>
+              <div class="value" style="font-size:22px;">${s.max_capacity_bytes > 0 ? s.usage_percent + '%' : '—'}</div>
+              <div class="delta">${s.warning ? '⚠ 容量不足预警' : '正常'}</div>
+            </div>
+          </div>
+          ${sec.keys.map(key => renderSettingRow(key, map[key] || '', SETTING_LABELS[key])).join('')}
+        </div>
+      `;
     }
     return `
-      <div class="form-group" style="max-width:480px;">
-        <label>${escapeHtml(meta.label)} <code>${escapeHtml(key)}</code></label>
-        ${input}
-        <div class="text-muted" style="font-size:11px;margin-top:4px;">当前: ${escapeHtml(current || '(未设置)')}</div>
+      <div class="trend-card">
+        <h3>${escapeHtml(sec.title)}</h3>
+        ${sec.keys.map(key => renderSettingRow(key, map[key] || '', SETTING_LABELS[key])).join('')}
       </div>
     `;
   }).join('');
 
   body.innerHTML = `
-    <div class="trend-card">
-      <h3>基本配置</h3>
-      <form id="settingsForm">
-        ${rows}
-        <div id="settingsAlert"></div>
-        <button type="submit" class="btn">保存设置</button>
-      </form>
-    </div>
+    <form id="settingsForm">
+      ${cards}
+      <div id="settingsAlert"></div>
+      <button type="submit" class="btn" style="margin-top:6px;">保存设置</button>
+    </form>
   `;
 
   $('#settingsForm').onsubmit = async (e) => {
@@ -1961,8 +2290,10 @@ async function renderSettings(c) {
     const btn = e.target.querySelector('button[type="submit"]');
     btn.disabled = true; btn.textContent = '保存中…';
     try {
-      for (const key of Object.keys(SETTING_LABELS)) {
-        const value = $(`#setting-${key}`).value.trim();
+      const keys = SETTING_SECTIONS.flatMap(s => s.keys);
+      for (const key of keys) {
+        const el = $(`#setting-${key}`);
+        const value = el ? el.value.trim() : '';
         await api(`/settings/${key}`, { method: 'PUT', body: JSON.stringify({ value }) });
       }
       $('#settingsAlert').innerHTML = '<div class="alert alert-success">设置已保存</div>';
@@ -1973,6 +2304,18 @@ async function renderSettings(c) {
       btn.disabled = false; btn.textContent = '保存设置';
     }
   };
+}
+
+function renderSettingRow(key, current, meta) {
+  if (!meta) return '';
+  const input = renderSettingInput(key, current, meta);
+  return `
+    <div class="form-group" style="max-width:560px;">
+      <label>${escapeHtml(meta.label)} <code style="font-size:11px;">${escapeHtml(key)}</code></label>
+      ${input}
+      <div class="text-muted" style="font-size:11px;margin-top:4px;">当前: ${escapeHtml(current || '(未设置,使用默认值)')}</div>
+    </div>
+  `;
 }
 
 // ============================

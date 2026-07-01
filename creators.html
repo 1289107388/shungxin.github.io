@@ -5,7 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>发现创作者 · 双薪写真画廊</title>
   <meta name="description" content="发现双薪写真画廊中的优质创作者">
-  <link rel="stylesheet" href="css/styles.css">
+  <link rel="stylesheet" href="css/styles.css?v=3">
+  <link rel="stylesheet" href="css/aos.css">
 </head>
 <body>
   <div class="scroll-progress" id="scrollProgress" style="width: 0%;"></div>
@@ -17,6 +18,7 @@
     <ul class="nav-links">
       <li><a href="index.html">Gallery</a></li>
       <li><a class="active" href="creators.html">Creators</a></li>
+      <li><a href="collections.html">图集</a></li>
       <li><a href="paid.html">付费区</a></li>
       <li><a href="index.html#footer">About</a></li>
     </ul>
@@ -54,14 +56,15 @@
     <button class="mobile-nav-close" id="mobileNavClose">✕</button>
     <a href="index.html">Gallery</a>
     <a href="creators.html">Creators</a>
+    <a href="collections.html">图集</a>
     <a href="paid.html">付费区</a>
     <a href="index.html#footer">About</a>
   </div>
 
   <!-- Creators Hero -->
-  <section class="creators-hero">
-    <h1 class="creators-hero-title">发现优质创作者</h1>
-    <p class="creators-hero-subtitle">按作品数、获赞数、浏览量找到你感兴趣的摄影师</p>
+  <section class="creators-hero" data-aos="fade-down">
+    <h1 class="creators-hero-title" data-aos="fade-up" data-aos-delay="100">发现优质创作者</h1>
+    <p class="creators-hero-subtitle" data-aos="fade-up" data-aos-delay="200">浏览、关注并与才华横溢的创作者互动</p>
     <div class="creators-toolbar">
       <div class="creators-search">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
@@ -214,5 +217,14 @@
   <script src="js/auth.js"></script>
   <script src="js/userProfile.js"></script>
   <script src="js/creators.js"></script>
+
+  <script src="js/aos.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      if (window.AOS) {
+        AOS.init({ duration: 700, easing: 'ease-out-cubic', once: true, offset: 80, disable: window.matchMedia('(prefers-reduced-motion: reduce)').matches });
+      }
+    });
+  </script>
 </body>
 </html>

@@ -10,10 +10,12 @@ ALTER TABLE public.users
   ADD COLUMN IF NOT EXISTS bio TEXT;
 
 -- 2. 创作者统计视图(供 user-api / 创作者发现页使用)
---    仅统计已上架(is_visible=true)且公开区(area='public')的作品
-CREATE OR REPLACE VIEW public.creator_stats AS
+--    包含所有用户；仅统计已上架(is_visible=true)且公开区(area='public')的作品，无作品用户统计为 0
+DROP VIEW IF EXISTS public.creator_stats;
+CREATE VIEW public.creator_stats AS
 SELECT
   u.id,
+  u.uid,
   u.username,
   u.display_name,
   u.avatar,
@@ -30,7 +32,7 @@ LEFT JOIN public.image_likes il
   ON il.image_id::bigint = gi.id
 LEFT JOIN public.image_views iv
   ON iv.image_id::bigint = gi.id
-GROUP BY u.id, u.username, u.display_name, u.avatar, u.bio, u.role, u.created_at;
+GROUP BY u.id, u.uid, u.username, u.display_name, u.avatar, u.bio, u.role, u.created_at;
 
 -- 3. 索引(加速创作者排名/搜索)
 CREATE INDEX IF NOT EXISTS idx_gallery_images_uploaded_by_visible

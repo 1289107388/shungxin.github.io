@@ -248,6 +248,8 @@
         card.className = 'image-card';
         card.dataset.index = index;
         card.dataset.id = img.id;
+        card.setAttribute('data-aos', 'fade-up');
+        card.setAttribute('data-aos-delay', String((index % 8) * 60));
 
         // 获取点赞数和浏览数
         const likes = likeCountsData[img.id] || img.likes || 0;
@@ -370,6 +372,11 @@
       });
 
       observeCards();
+
+      // AOS 需要刷新以识别动态渲染的卡片
+      if (window.AOS && typeof window.AOS.refresh === 'function') {
+        window.AOS.refresh();
+      }
 
       // 绑定作者徽章点击事件
       bindAuthorBadge(galleryGrid);

@@ -7,34 +7,42 @@
 // 缓存: 1 分钟
 // ============================
 
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0';
 import { verifyOrigin } from '../_shared/originGuard.ts';
 import { checkRateLimit } from '../_shared/rateLimiter.ts';
-
-const SUPABASE_URL = Deno.env.get('SUPABASE_URL') || '';
-const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
+import { CORS_HEADERS } from '../_shared/cors.ts';
+import { createServiceClient } from '../_shared/supabaseClient.ts';
 
 const USER_API_RATE_LIMIT_PER_MIN = 120;
 
-const CORS_HEADERS = {
-  'Access-Control-Allow-Origin': '*',
+const USER_CORS_HEADERS = {
+  ...CORS_HEADERS,
   'Access-Control-Allow-Methods': 'GET, OPTIONS',
-  'Access-Control-Allow-Headers': 'apikey, Authorization, Content-Type, x-client-info',
-  'Access-Control-Max-Age': '86400',
   'Cache-Control': 'public, max-age=60, stale-while-revalidate=300',
 };
 
 function cors(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
+    headers: { ...USER_CORS_HEADERS, 'Content-Type': 'application/json' },
   });
 }
 
-function createServiceClient() {
-  return createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
-    auth: { autoRefreshToken: false, persistSession: false },
-  });
+async function resolveUserId(supabase: ReturnType<typeof createServiceClient>, identifier: string): Promise<number | Response> {
+  if (/^\d+$/.test(identifier)) {
+    const userId = parseInt(identifier, 10);
+    return Number.isInteger(userId) && userId > 0 ? userId : cors({ error: '用户 id 无效' }, 400);
+  }
+  const { data: userRow, error: userError } = await supabase
+    .from('users')
+    .select('id')
+    .eq('username', identifier)
+    .maybeSingle();
+  if (userError) {
+    console.error('查询用户 id 失败:', userError);
+    return cors({ error: '查询用户失败', detail: userError.message || String(userError) }, 500);
+  }
+  if (!userRow) return cors({ error: '用户不存在' }, 404);
+  return userRow.id;
 }
 
 Deno.serve(async (req) => {
@@ -42,7 +50,7 @@ Deno.serve(async (req) => {
   if (blocked) return blocked;
 
   if (req.method === 'OPTIONS') {
-    return new Response(null, { status: 204, headers: CORS_HEADERS });
+    return new Response(null, { status: 204, headers: USER_CORS_HEADERS });
   }
   if (req.method !== 'GET') {
     return cors({ error: '仅支持 GET' }, 405);
@@ -68,24 +76,8 @@ Deno.serve(async (req) => {
       return await handlePublicProfile(supabase, parts[1]);
     }
     if (parts[0] === 'user-images' && parts.length === 2) {
-      const identifier = parts[1];
-      let userId: number;
-      if (/^\d+$/.test(identifier)) {
-        userId = parseInt(identifier, 10);
-      } else {
-        const { data: userRow, error: userError } = await supabase
-          .from('users')
-          .select('id')
-          .eq('username', identifier)
-          .maybeSingle();
-        if (userError) {
-          console.error('查询用户 id 失败:', userError);
-          return cors({ error: '查询用户失败', detail: userError.message || String(userError) }, 500);
-        }
-        if (!userRow) return cors({ error: '用户不存在' }, 404);
-        userId = userRow.id;
-      }
-      if (!Number.isInteger(userId) || userId <= 0) return cors({ error: '用户 id 无效' }, 400);
+      const userId = await resolveUserId(supabase, parts[1]);
+      if (userId instanceof Response) return userId;
       return await handleUserImages(supabase, userId, url.searchParams);
     }
     return cors({ error: '未知接口' }, 404);
@@ -130,6 +122,7 @@ async function handleCreators(supabase: ReturnType<typeof createServiceClient>, 
 
   const safe = (data || []).map((u: any) => ({
     id: u.id,
+    uid: u.uid,
     username: u.username,
     display_name: u.display_name,
     avatar: u.avatar,
@@ -145,32 +138,46 @@ async function handleCreators(supabase: ReturnType<typeof createServiceClient>, 
 
 async function handlePublicProfile(supabase: ReturnType<typeof createServiceClient>, identifier: string) {
   const isId = /^\d+$/.test(identifier);
-  const q = supabase
-    .from('creator_stats')
-    .select('*')
-    .limit(1);
-  const { data, error } = isId
-    ? await q.eq('id', parseInt(identifier, 10)).maybeSingle()
-    : await q.eq('username', identifier).maybeSingle();
 
-  if (error) {
-    console.error('查询用户资料失败:', error);
-    return cors({ error: '查询用户资料失败', detail: error.message || String(error) }, 500);
+  // 1. 先从 users 表读取用户基本资料，避免 creator_stats 视图过滤导致无作品用户 404
+  const usersQ = supabase
+    .from('users')
+    .select('id, uid, username, display_name, avatar, bio, role, created_at')
+    .limit(1);
+  const { data: userRow, error: userError } = isId
+    ? await usersQ.eq('id', parseInt(identifier, 10)).maybeSingle()
+    : await usersQ.eq('username', identifier).maybeSingle();
+
+  if (userError) {
+    console.error('查询用户资料失败:', userError);
+    return cors({ error: '查询用户资料失败', detail: userError.message || String(userError) }, 500);
   }
-  if (!data) return cors({ error: '用户不存在' }, 404);
+  if (!userRow) return cors({ error: '用户不存在' }, 404);
+
+  // 2. 再查创作者统计；若视图未包含该用户则使用零值兜底
+  const { data: statsRow, error: statsError } = await supabase
+    .from('creator_stats')
+    .select('works_count, total_likes, total_views')
+    .eq('id', userRow.id)
+    .maybeSingle();
+
+  if (statsError) {
+    console.error('查询用户统计失败:', statsError);
+  }
 
   const profile = {
-    id: data.id,
-    username: data.username,
-    display_name: data.display_name,
-    avatar: data.avatar,
-    bio: data.bio,
-    role: data.role,
-    created_at: data.created_at,
+    id: userRow.id,
+    uid: userRow.uid,
+    username: userRow.username,
+    display_name: userRow.display_name,
+    avatar: userRow.avatar,
+    bio: userRow.bio,
+    role: userRow.role,
+    created_at: userRow.created_at,
     stats: {
-      works_count: Number(data.works_count || 0),
-      total_likes: Number(data.total_likes || 0),
-      total_views: Number(data.total_views || 0),
+      works_count: Number(statsRow?.works_count || 0),
+      total_likes: Number(statsRow?.total_likes || 0),
+      total_views: Number(statsRow?.total_views || 0),
     },
   };
   return cors({ success: true, data: profile });
@@ -186,7 +193,7 @@ async function handleUserImages(
 
   const { data, error } = await supabase
     .from('gallery_images')
-    .select(`*, uploader:users!uploaded_by(id, username, display_name, avatar)`)
+    .select(`*, uploader:users!uploaded_by(id, uid, username, display_name, avatar)`)
     .eq('uploaded_by', userId)
     .eq('is_visible', true)
     .eq('area', 'public')
@@ -210,10 +217,11 @@ async function handleUserImages(
     width: img.width ?? null,
     height: img.height ?? null,
     src: img.storage_path
-      ? `${SUPABASE_URL}/storage/v1/object/public/${img.storage_bucket || 'gallery-images'}/${img.storage_path}`
+      ? `${Deno.env.get('SUPABASE_URL')}/storage/v1/object/public/${img.storage_bucket || 'gallery-images'}/${img.storage_path}`
       : 'assets/images/' + img.filename,
     uploader: img.uploader ? {
       id: img.uploader.id,
+      uid: img.uploader.uid,
       username: img.uploader.username,
       display_name: img.uploader.display_name,
       avatar: img.uploader.avatar,
